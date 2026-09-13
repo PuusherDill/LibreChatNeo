@@ -3,13 +3,14 @@
     <img src="client/public/assets/logo.svg" height="256">
   </a>
   <h1 align="center">
-    <a href="https://librechat.ai">LibreChat</a>
+    <a href="https://librechat.ai">LibreChatNEO FORK*</a>
   </h1>
 </p>
 
 <p align="center">
   <strong>English</strong> ·
   <a href="README.zh.md">中文</a>
+  <a href="README.ru.md">RU</a>
 </p>
 
 <p align="center">
