@@ -94,6 +94,19 @@ services:
     env_file:
       - .env
 
+  bot-service:
+    container_name: bot-service
+    build:
+      context: ./services/bot-service
+      dockerfile: Dockerfile
+    restart: always
+    depends_on:
+      - api
+    env_file:
+      - ./services/bot-service/.env
+    environment:
+      - LIBRECHAT_API_URL=http://api:${PORT:-3080}
+
 volumes:
   pgdata2:
   librechat-data:
