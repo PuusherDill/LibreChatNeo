@@ -77,6 +77,22 @@ export interface IUser extends Document {
   tenantId?: string;
   federatedTokens?: OIDCTokens;
   openidTokens?: OIDCTokens;
+  /**
+   * Hash of this user's OpenRouter API key.
+   * Not selected by default – request with `+openrouterKeyHash`.
+   */
+  openrouterKeyHash?: string;
+  /**
+   * AES-256-GCM encrypted OpenRouter API key (plaintext never stored as-is).
+   * Not selected by default – request with `+openrouterKeyEncrypted`.
+   */
+  openrouterKeyEncrypted?: string;
+  /** Cached credit limit for this user's OpenRouter key (USD) */
+  openrouterCreditLimit?: number;
+  /** Cached credit usage for this user's OpenRouter key (USD) */
+  openrouterCreditUsed?: number;
+  /** Whether this user's OpenRouter key is currently disabled */
+  openrouterKeyDisabled?: boolean;
 }
 
 export interface OIDCTokens {

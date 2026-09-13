@@ -199,6 +199,40 @@ const userSchema: Schema<IUser> = new Schema<IUser>(
       type: String,
       index: true,
     },
+    /**
+     * Hash of this user's OpenRouter API key (returned by OpenRouter Management API).
+     * Used to manage the key (update limit, disable, etc.) via PATCH /api/v1/keys/{hash}.
+     * Not the full key – use openrouterKeyEncrypted to get the plaintext key for request auth.
+     */
+    openrouterKeyHash: {
+      type: String,
+      select: false,
+      sparse: true,
+    },
+    /**
+     * AES-256-GCM encrypted plaintext OpenRouter API key for this user.
+     * Format: "<iv_hex>:<authTag_hex>:<ciphertext_hex>"
+     * Decrypted only when needed to authenticate a user's chat request.
+     */
+    openrouterKeyEncrypted: {
+      type: String,
+      select: false,
+    },
+    /** Current credit limit for this user's OpenRouter key (USD), cached from OpenRouter API */
+    openrouterCreditLimit: {
+      type: Number,
+      default: 0,
+    },
+    /** Credits consumed so far (USD), cached value – refreshed on admin panel load */
+    openrouterCreditUsed: {
+      type: Number,
+      default: 0,
+    },
+    /** Whether this user's OpenRouter key is currently disabled */
+    openrouterKeyDisabled: {
+      type: Boolean,
+      default: false,
+    },
   },
   { timestamps: true },
 );

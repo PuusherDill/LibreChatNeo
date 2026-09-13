@@ -443,6 +443,31 @@ const registerUser = async (user, additionalData = {}) => {
       await updateUser(newUserId, { emailVerified: true });
     }
 
+    // Provision a personal OpenRouter API key for the new user (non-fatal if OR is not configured)
+    try {
+      const { createKeyForUser } = require('@librechat/api');
+      const initialLimit = parseFloat(process.env.OPENROUTER_INITIAL_CREDIT_LIMIT ?? '0') || 0;
+      if (process.env.OPENROUTER_MANAGEMENT_KEY && initialLimit > 0) {
+        const displayName = `${name || username || email} [LibreChat]`;
+        const { hash, keyEncrypted } = await createKeyForUser(displayName, initialLimit);
+        await updateUser(newUserId, {
+          openrouterKeyHash: hash,
+          openrouterKeyEncrypted: keyEncrypted,
+          openrouterCreditLimit: initialLimit,
+          openrouterCreditUsed: 0,
+          openrouterKeyDisabled: false,
+        });
+        logger.info(
+          `[registerUser] OpenRouter key provisioned for user [Email: ${email}] [Hash: ${hash}]`,
+        );
+      }
+    } catch (orErr) {
+      // Log but do NOT fail registration – OR key can be provisioned later from the admin panel
+      logger.error(
+        `[registerUser] Failed to provision OpenRouter key for [Email: ${email}]: ${orErr.message}`,
+      );
+    }
+
     /** `userCreated` separates this from the identical 200 returned when the email is
      * already in use, so a caller can act on an account having actually been created
      * without the response body revealing which of the two happened. */

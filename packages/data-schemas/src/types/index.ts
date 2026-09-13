@@ -52,3 +52,5 @@ export * from './web';
 /* MCP Servers */
 export * from './mcp';
 export * from './mcpAuthority';
+/* OpenRouter key provisioning */
+export * from './openrouterTopUp';
