@@ -29,6 +29,9 @@ function getTopUpModel() {
 router.get('/balance', async (req, res) => {
   try {
     const userId = req.user._id;
+    const gelPerUsd = parseFloat(process.env.GEL_PER_USD) || 2.70;
+    const minTopUpGel = parseFloat(process.env.MIN_TOPUP_GEL) || 10;
+    const presetPackagesGel = [15, 20, 35, 45];
 
     const user = await runAsSystem(() =>
       findUser(
@@ -41,14 +44,18 @@ router.get('/balance', async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    const limit = user.openrouterCreditLimit ?? 0;
-    const used = user.openrouterCreditUsed ?? 0;
-    const remaining = Math.max(0, parseFloat((limit - used).toFixed(4)));
+    const limitUsd = user.openrouterCreditLimit ?? 0;
+    const usedUsd = user.openrouterCreditUsed ?? 0;
+    const remainingUsd = Math.max(0, parseFloat((limitUsd - usedUsd).toFixed(4)));
     const disabled = user.openrouterKeyDisabled ?? false;
     const hasKey = !!user.openrouterKeyHash;
 
+    const balanceGel = parseFloat((remainingUsd * gelPerUsd).toFixed(2));
+    const limitGel = parseFloat((limitUsd * gelPerUsd).toFixed(2));
+    const usedGel = parseFloat((usedUsd * gelPerUsd).toFixed(2));
+
     // Sync Mongo tokenCredits field
-    runAsSystem(() => upsertBalanceFields({ user: userId, tokenCredits: remaining })).catch(() => {});
+    runAsSystem(() => upsertBalanceFields({ user: userId, tokenCredits: remainingUsd })).catch(() => {});
 
     let liveStatus = null;
     if (hasKey) {
@@ -61,9 +68,15 @@ router.get('/balance', async (req, res) => {
 
     return res.json({
       hasKey,
-      creditLimit: limit,
-      creditUsed: used,
-      remaining,
+      creditLimit: limitUsd,
+      creditUsed: usedUsd,
+      remaining: remainingUsd,
+      balanceGel,
+      limitGel,
+      usedGel,
+      gelPerUsd,
+      minTopUpGel,
+      presetPackagesGel,
       disabled,
       liveStatus,
     });
@@ -75,17 +88,31 @@ router.get('/balance', async (req, res) => {
 
 // ---------------------------------------------------------------------------
 // POST /api/openrouter/topup
-// Body: { amount: number, transactionType?: 'topup' | 'subscription', subscriptionMonths?: number, note?: string }
-// Enforces minimum $5.00 limit.
+// Body: { amountGel?: number, amount?: number, transactionType?: 'topup' | 'subscription', subscriptionMonths?: number, note?: string }
+// Enforces GEL/USD conversion and minimum GEL top-up.
 // ---------------------------------------------------------------------------
 router.post('/topup', async (req, res) => {
   try {
     const userId = req.user._id;
+    const gelPerUsd = parseFloat(process.env.GEL_PER_USD) || 2.70;
+    const minTopUpGel = parseFloat(process.env.MIN_TOPUP_GEL) || 10;
     const { note = '', transactionType = 'topup', subscriptionMonths } = req.body;
-    const amount = parseFloat(req.body.amount);
 
-    if (isNaN(amount) || amount < 5) {
-      return res.status(400).json({ error: 'Минимальная сумма пополнения — $5.00' });
+    let amountGel = parseFloat(req.body.amountGel);
+    let amountUsd = parseFloat(req.body.amount);
+
+    if (!isNaN(amountGel)) {
+      if (amountGel < minTopUpGel) {
+        return res.status(400).json({ error: `Минимальная сумма пополнения — ${minTopUpGel} GEL` });
+      }
+      amountUsd = parseFloat((amountGel / gelPerUsd).toFixed(4));
+    } else if (!isNaN(amountUsd)) {
+      amountGel = parseFloat((amountUsd * gelPerUsd).toFixed(2));
+      if (amountGel < minTopUpGel) {
+        return res.status(400).json({ error: `Минимальная сумма пополнения — ${minTopUpGel} GEL` });
+      }
+    } else {
+      return res.status(400).json({ error: 'Укажите сумму пополнения' });
     }
 
     const user = await runAsSystem(() =>
@@ -104,30 +131,31 @@ router.post('/topup', async (req, res) => {
     // Auto-provision key if user doesn't have one yet
     if (!keyHash) {
       const displayName = `${user.name || user.username || user.email} [LibreChat]`;
-      const provisioned = await createKeyForUser(displayName, amount);
+      const provisioned = await createKeyForUser(displayName, amountUsd);
       keyHash = provisioned.hash;
       await updateUser(userId, {
         openrouterKeyHash: provisioned.hash,
         openrouterKeyEncrypted: provisioned.keyEncrypted,
-        openrouterCreditLimit: amount,
+        openrouterCreditLimit: amountUsd,
         openrouterCreditUsed: 0,
         openrouterKeyDisabled: false,
       });
     }
 
-    const prevLimit = user.openrouterCreditLimit ?? 0;
-    const newLimit = parseFloat((prevLimit + amount).toFixed(4));
-    const newRemaining = Math.max(0, newLimit - (user.openrouterCreditUsed ?? 0));
+    const prevLimitUsd = user.openrouterCreditLimit ?? 0;
+    const newLimitUsd = parseFloat((prevLimitUsd + amountUsd).toFixed(4));
+    const newRemainingUsd = Math.max(0, newLimitUsd - (user.openrouterCreditUsed ?? 0));
+    const newRemainingGel = parseFloat((newRemainingUsd * gelPerUsd).toFixed(2));
 
     // Update limit on OpenRouter Management API if configured
-    await updateKeyLimit(keyHash, newLimit);
+    await updateKeyLimit(keyHash, newLimitUsd);
 
     // Update local database user record and sync balances collection
     await updateUser(userId, {
-      openrouterCreditLimit: newLimit,
+      openrouterCreditLimit: newLimitUsd,
       openrouterKeyDisabled: false,
     });
-    await runAsSystem(() => upsertBalanceFields({ user: userId, tokenCredits: newRemaining }));
+    await runAsSystem(() => upsertBalanceFields({ user: userId, tokenCredits: newRemainingUsd }));
 
     // Record top-up transaction
     const TopUp = getTopUpModel();
@@ -141,10 +169,11 @@ router.post('/topup', async (req, res) => {
 
     const record = await TopUp.create({
       user: userId,
-      amount,
-      newLimit,
-      previousLimit: prevLimit,
-      note: note || (transactionType === 'subscription' ? `Подписка на ${subscriptionMonths} мес.` : 'Пополнение баланса'),
+      amount: amountUsd,
+      amountGel,
+      newLimit: newLimitUsd,
+      previousLimit: prevLimitUsd,
+      note: note || (transactionType === 'subscription' ? `Подписка на ${subscriptionMonths} мес.` : `Пополнение на ${amountGel} GEL ($${amountUsd} USD)`),
       addedBy: userId,
       transactionType,
       subscriptionMonths: subscriptionMonths ? parseInt(subscriptionMonths, 10) : null,
@@ -153,13 +182,14 @@ router.post('/topup', async (req, res) => {
     });
 
     logger.info(
-      `[openrouterUser] User ${req.user.email} topped up $${amount}. New limit: $${newLimit}`,
+      `[openrouterUser] User ${req.user.email} topped up ${amountGel} GEL ($${amountUsd} USD). New limit: $${newLimitUsd}`,
     );
 
     return res.json({
       success: true,
-      newLimit,
-      remaining: Math.max(0, newLimit - (user.openrouterCreditUsed ?? 0)),
+      newLimit: newLimitUsd,
+      remaining: newRemainingUsd,
+      balanceGel: newRemainingGel,
       transaction: record.toObject(),
     });
   } catch (err) {

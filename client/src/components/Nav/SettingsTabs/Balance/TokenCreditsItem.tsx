@@ -22,9 +22,9 @@ const TokenCreditsItem: React.FC<TokenCreditsItemProps> = () => {
         <InfoHoverCard side={ESide.Bottom} text="Доступный остаток баланса для ИИ моделей" />
       </div>
 
-      {/* Right Section: Synchronized USD Value */}
-      <span className="text-base font-bold text-emerald-500 font-mono" role="note">
-        ${remaining.toFixed(2)} USD
+      {/* Right Section: Synchronized GEL / USD Value */}
+      <span className="text-sm font-extrabold text-emerald-500 font-mono" role="note">
+        ₾{(remaining * 2.70).toFixed(2)} GEL <span className="text-xs font-normal opacity-75">(${remaining.toFixed(2)} USD)</span>
       </span>
     </div>
   );

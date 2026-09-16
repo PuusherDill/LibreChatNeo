@@ -7,7 +7,7 @@ import {
   Calendar,
   Sparkles,
   AlertCircle,
-  DollarSign,
+  Coins,
   TrendingUp,
 } from 'lucide-react';
 import { Button, Input, Label, OGDialog, OGDialogTemplate, useToastContext, Spinner } from '@librechat/client';
@@ -17,6 +17,7 @@ import { useAuthContext } from '~/hooks';
 interface ITransaction {
   _id: string;
   amount: number;
+  amountGel?: number;
   newLimit: number;
   previousLimit: number;
   note?: string;
@@ -30,6 +31,12 @@ interface IBalanceData {
   creditLimit: number;
   creditUsed: number;
   remaining: number;
+  balanceGel?: number;
+  limitGel?: number;
+  usedGel?: number;
+  gelPerUsd?: number;
+  minTopUpGel?: number;
+  presetPackagesGel?: number[];
   disabled: boolean;
 }
 
@@ -42,17 +49,23 @@ export default function OpenRouterUserBilling() {
     creditLimit: user?.openrouterCreditLimit ?? 0,
     creditUsed: user?.openrouterCreditUsed ?? 0,
     remaining: Math.max(0, (user?.openrouterCreditLimit ?? 0) - (user?.openrouterCreditUsed ?? 0)),
+    balanceGel: Math.max(0, ((user?.openrouterCreditLimit ?? 0) - (user?.openrouterCreditUsed ?? 0)) * 2.70),
+    gelPerUsd: 2.70,
+    minTopUpGel: 10,
+    presetPackagesGel: [15, 20, 35, 45],
     disabled: user?.openrouterKeyDisabled ?? false,
   });
-
-  const [loading, setLoading] = useState(false);
 
   // Modals
   const [showTopUpModal, setShowTopUpModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
 
   // Top Up Form State
-  const [amount, setAmount] = useState<string>('5');
+  const gelRate = balance.gelPerUsd || 2.70;
+  const minGel = balance.minTopUpGel || 10;
+  const presets = balance.presetPackagesGel || [15, 20, 35, 45];
+
+  const [amountGel, setAmountGel] = useState<string>('15');
   const [transType, setTransType] = useState<'topup' | 'subscription'>('topup');
   const [subMonths, setSubMonths] = useState<number>(1);
   const [note, setNote] = useState<string>('');
@@ -90,40 +103,41 @@ export default function OpenRouterUserBilling() {
     fetchBalance();
   }, [fetchBalance]);
 
-  const handleAmountChange = (val: string) => {
-    setAmount(val);
+  const handleAmountGelChange = (val: string) => {
+    setAmountGel(val);
     const num = parseFloat(val);
-    if (isNaN(num) || num < 5) {
-      setMinError('Минимальная сумма пополнения — $5.00');
+    if (isNaN(num) || num < minGel) {
+      setMinError(`Минимальная сумма пополнения — ${minGel} GEL`);
     } else {
       setMinError('');
     }
   };
 
   const selectPreset = (preset: number) => {
-    setAmount(preset.toString());
+    setAmountGel(preset.toString());
     setMinError('');
   };
 
   const handleTopUpSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const numAmount = parseFloat(amount);
-    if (isNaN(numAmount) || numAmount < 5) {
-      setMinError('Минимальная сумма пополнения — $5.00');
+    const numGel = parseFloat(amountGel);
+    if (isNaN(numGel) || numGel < minGel) {
+      setMinError(`Минимальная сумма пополнения — ${minGel} GEL`);
       return;
     }
 
     setIsSubmitting(true);
     try {
       const res = await request.post<any>('/api/openrouter/topup', {
-        amount: numAmount,
+        amountGel: numGel,
         transactionType: transType,
         subscriptionMonths: transType === 'subscription' ? subMonths : undefined,
         note,
       });
 
+      const convertedUsd = (numGel / gelRate).toFixed(2);
       showToast({
-        message: `Баланс успешно пополнен на $${numAmount.toFixed(2)}! Новый лимит: $${res.newLimit}`,
+        message: `Баланс успешно пополнен на ₾${numGel.toFixed(2)} GEL ($${convertedUsd} USD)!`,
         status: 'success',
       });
 
@@ -138,6 +152,8 @@ export default function OpenRouterUserBilling() {
   };
 
   const isExhausted = balance.creditLimit > 0 && balance.remaining <= 0;
+  const currentGelBalance = balance.balanceGel ?? parseFloat((balance.remaining * gelRate).toFixed(2));
+  const calcUsd = !isNaN(parseFloat(amountGel)) ? (parseFloat(amountGel) / gelRate).toFixed(2) : '0.00';
 
   return (
     <div className="w-full mt-4 p-4 rounded-xl border border-border-subtle bg-surface-secondary/80 backdrop-blur-sm space-y-4">
@@ -149,7 +165,7 @@ export default function OpenRouterUserBilling() {
           </div>
           <div>
             <div className="font-semibold text-text-primary text-base flex items-center gap-2">
-              Баланс ИИ OpenRouter
+              Баланс ИИ Аккаунта (GEL / USD)
               {balance.disabled ? (
                 <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-500/10 text-red-500 border border-red-500/20">
                   Заблокирован
@@ -165,7 +181,7 @@ export default function OpenRouterUserBilling() {
               )}
             </div>
             <div className="text-xs text-text-secondary mt-0.5">
-              Лимит средств для мгновенного доступа к ИИ моделям
+              Единый счет для быстрого использования всех нейросетей
             </div>
           </div>
         </div>
@@ -191,7 +207,7 @@ export default function OpenRouterUserBilling() {
             className="flex items-center gap-1.5 text-xs py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-medium shadow-sm"
           >
             <PlusCircle className="size-3.5" />
-            Пополнить
+            Пополнить баланс
           </Button>
         </div>
       </div>
@@ -200,8 +216,13 @@ export default function OpenRouterUserBilling() {
       <div className="space-y-2">
         <div className="flex justify-between items-baseline">
           <div className="text-xs text-text-secondary">Остаток на счёте:</div>
-          <div className={`text-xl font-extrabold ${isExhausted ? 'text-red-500' : 'text-emerald-500'}`}>
-            ${balance.remaining.toFixed(2)} USD
+          <div className="text-right">
+            <div className={`text-2xl font-extrabold ${isExhausted ? 'text-red-500' : 'text-emerald-500'}`}>
+              ₾{currentGelBalance.toFixed(2)} GEL
+            </div>
+            <div className="text-xs text-text-secondary font-mono">
+              ~ ${balance.remaining.toFixed(2)} USD
+            </div>
           </div>
         </div>
 
@@ -217,8 +238,8 @@ export default function OpenRouterUserBilling() {
         </div>
 
         <div className="flex justify-between text-xs text-text-secondary pt-0.5">
-          <span>Всего выделено: <strong className="text-text-primary">${balance.creditLimit.toFixed(2)}</strong></span>
-          <span>Использовано: <strong className="text-text-primary">${balance.creditUsed.toFixed(2)}</strong></span>
+          <span>Всего выделено: <strong className="text-text-primary">₾{(balance.limitGel ?? (balance.creditLimit * gelRate)).toFixed(2)} GEL (${balance.creditLimit.toFixed(2)} USD)</strong></span>
+          <span>Использовано: <strong className="text-text-primary">₾{(balance.usedGel ?? (balance.creditUsed * gelRate)).toFixed(2)} GEL (${balance.creditUsed.toFixed(2)} USD)</strong></span>
         </div>
       </div>
 
@@ -226,7 +247,7 @@ export default function OpenRouterUserBilling() {
       {showTopUpModal && (
         <OGDialog open={true} onOpenChange={() => setShowTopUpModal(false)}>
           <OGDialogTemplate
-            title="Пополнение баланса и подписка"
+            title="Пополнение баланса аккаунта"
             showCloseButton={true}
           >
             <form onSubmit={handleTopUpSubmit} className="space-y-5 pt-2">
@@ -243,10 +264,10 @@ export default function OpenRouterUserBilling() {
                         : 'border-border-subtle bg-surface-tertiary/50 text-text-secondary hover:border-border-medium'
                     }`}
                   >
-                    <DollarSign className={`size-5 mt-0.5 ${transType === 'topup' ? 'text-emerald-500' : 'text-text-tertiary'}`} />
+                    <Coins className={`size-5 mt-0.5 ${transType === 'topup' ? 'text-emerald-500' : 'text-text-tertiary'}`} />
                     <div>
-                      <div className="font-semibold text-sm">Разовое пополнение</div>
-                      <div className="text-xs opacity-75 mt-0.5">Пополнение лимита на выбранную сумму</div>
+                      <div className="font-semibold text-sm">Разовый пакет</div>
+                      <div className="text-xs opacity-75 mt-0.5">Мгновенное пополнение на выбранный пакет</div>
                     </div>
                   </button>
 
@@ -262,28 +283,29 @@ export default function OpenRouterUserBilling() {
                     <Calendar className={`size-5 mt-0.5 ${transType === 'subscription' ? 'text-emerald-500' : 'text-text-tertiary'}`} />
                     <div>
                       <div className="font-semibold text-sm">Подписка (ежемесячно)</div>
-                      <div className="text-xs opacity-75 mt-0.5">Регулярное пополнение каждый месяц</div>
+                      <div className="text-xs opacity-75 mt-0.5">Автопополнение каждые 30 дней</div>
                     </div>
                   </button>
                 </div>
               </div>
 
-              {/* Presets */}
+              {/* Presets GEL */}
               <div className="space-y-2">
-                <Label className="text-xs font-semibold uppercase text-text-secondary">Выберите сумму ($ USD)</Label>
+                <Label className="text-xs font-semibold uppercase text-text-secondary">Выберите пакет (Лари ₾)</Label>
                 <div className="grid grid-cols-4 gap-2">
-                  {[5, 10, 25, 50].map((preset) => (
+                  {presets.map((preset) => (
                     <button
                       key={preset}
                       type="button"
                       onClick={() => selectPreset(preset)}
-                      className={`py-2 px-3 rounded-lg border font-semibold text-sm transition-all ${
-                        amount === preset.toString()
-                          ? 'border-emerald-500 bg-emerald-500/20 text-emerald-400'
+                      className={`py-2.5 px-3 rounded-xl border font-bold text-sm transition-all flex flex-col items-center justify-center ${
+                        amountGel === preset.toString()
+                          ? 'border-emerald-500 bg-emerald-500/20 text-emerald-400 shadow-sm'
                           : 'border-border-subtle bg-surface-tertiary text-text-primary hover:bg-surface-tertiary/80'
                       }`}
                     >
-                      ${preset}
+                      <span>{preset} GEL</span>
+                      <span className="text-[10px] font-normal opacity-70">~ ${(preset / gelRate).toFixed(2)} USD</span>
                     </button>
                   ))}
                 </div>
@@ -291,19 +313,22 @@ export default function OpenRouterUserBilling() {
 
               {/* Custom Amount Input */}
               <div className="space-y-1">
-                <Label className="text-xs font-semibold text-text-secondary">Или введите свою сумму (мин. $5.00)</Label>
+                <Label className="text-xs font-semibold text-text-secondary">Или введите свою сумму (мин. {minGel} GEL)</Label>
                 <div className="relative">
-                  <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-text-tertiary" />
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-bold text-emerald-500">₾</span>
                   <Input
                     type="number"
                     step="1"
-                    min="5"
-                    value={amount}
-                    onChange={(e) => handleAmountChange(e.target.value)}
+                    min={minGel}
+                    value={amountGel}
+                    onChange={(e) => handleAmountGelChange(e.target.value)}
                     placeholder="Например: 15"
                     className="pl-9 font-semibold text-base"
                     required
                   />
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-text-secondary font-mono">
+                    ≈ ${calcUsd} USD
+                  </div>
                 </div>
                 {minError && (
                   <p className="text-xs text-red-400 flex items-center gap-1 mt-1 font-medium">
@@ -358,7 +383,7 @@ export default function OpenRouterUserBilling() {
                   {isSubmitting ? (
                     <Spinner className="size-4" />
                   ) : (
-                    `Пополнить на $${parseFloat(amount || '0').toFixed(2)}`
+                    `Пополнить на ₾${parseFloat(amountGel || '0').toFixed(2)} GEL`
                   )}
                 </Button>
               </div>
@@ -393,7 +418,7 @@ export default function OpenRouterUserBilling() {
                     <div className="flex justify-between items-center">
                       <div className="flex items-center gap-2">
                         <span className="font-bold text-emerald-500 text-base">
-                          +${tx.amount.toFixed(2)}
+                          +{tx.amountGel ? `₾${tx.amountGel.toFixed(2)} GEL` : `$${tx.amount.toFixed(2)} USD`}
                         </span>
                         <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                           {tx.transactionType === 'subscription' ? 'Подписка' : 'Пополнение'}
