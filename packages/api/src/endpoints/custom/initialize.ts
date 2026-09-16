@@ -24,6 +24,7 @@ import { resolveEndpointRuntime } from '~/types';
 import { fetchModels } from '~/endpoints/models';
 import { validateEndpointURL } from '~/auth';
 import { tokenConfigCache } from '~/cache';
+import { decryptKey } from '~/openrouter/OpenRouterKeyService';
 
 const { PROXY } = process.env;
 
@@ -216,8 +217,23 @@ export async function initializeCustom(
     userValues = await db.getUserKeyValues({ userId: user?.id ?? '', name: endpoint });
   }
 
-  const apiKey = userProvidesKey || userProvidesURL ? userValues?.apiKey : CUSTOM_API_KEY;
+  let apiKey = userProvidesKey || userProvidesURL ? userValues?.apiKey : CUSTOM_API_KEY;
   const baseURL = userProvidesURL ? userValues?.baseURL : CUSTOM_BASE_URL;
+
+  // Auto-resolve per-user OpenRouter key if user has openrouterKeyEncrypted
+  if (baseURL?.includes('openrouter.ai') || endpoint.toLowerCase().includes('openrouter')) {
+    const userAny = user as any;
+    if (userAny?.openrouterKeyEncrypted) {
+      try {
+        const decKey = decryptKey(userAny.openrouterKeyEncrypted);
+        if (decKey && decKey.startsWith('sk-or-v1-')) {
+          apiKey = decKey;
+        }
+      } catch (e) {
+        // Fallback to default apiKey
+      }
+    }
+  }
 
   if ((userProvidesKey || userProvidesURL) && !apiKey) {
     throw new Error(

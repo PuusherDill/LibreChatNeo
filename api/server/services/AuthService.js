@@ -446,21 +446,19 @@ const registerUser = async (user, additionalData = {}) => {
     // Provision a personal OpenRouter API key for the new user (non-fatal if OR is not configured)
     try {
       const { createKeyForUser } = require('@librechat/api');
-      const initialLimit = parseFloat(process.env.OPENROUTER_INITIAL_CREDIT_LIMIT ?? '0') || 0;
-      if (process.env.OPENROUTER_MANAGEMENT_KEY && initialLimit > 0) {
-        const displayName = `${name || username || email} [LibreChat]`;
-        const { hash, keyEncrypted } = await createKeyForUser(displayName, initialLimit);
-        await updateUser(newUserId, {
-          openrouterKeyHash: hash,
-          openrouterKeyEncrypted: keyEncrypted,
-          openrouterCreditLimit: initialLimit,
-          openrouterCreditUsed: 0,
-          openrouterKeyDisabled: false,
-        });
-        logger.info(
-          `[registerUser] OpenRouter key provisioned for user [Email: ${email}] [Hash: ${hash}]`,
-        );
-      }
+      const initialLimit = parseFloat(process.env.OPENROUTER_INITIAL_CREDIT_LIMIT ?? '10') || 10;
+      const displayName = `${name || username || email} [LibreChat]`;
+      const { hash, keyEncrypted } = await createKeyForUser(displayName, initialLimit);
+      await updateUser(newUserId, {
+        openrouterKeyHash: hash,
+        openrouterKeyEncrypted: keyEncrypted,
+        openrouterCreditLimit: initialLimit,
+        openrouterCreditUsed: 0,
+        openrouterKeyDisabled: false,
+      });
+      logger.info(
+        `[registerUser] OpenRouter key provisioned for user [Email: ${email}] [Hash: ${hash}]`,
+      );
     } catch (orErr) {
       // Log but do NOT fail registration – OR key can be provisioned later from the admin panel
       logger.error(

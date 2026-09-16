@@ -15,9 +15,16 @@ function useBalance(): Partial<TBalanceResponse> {
   return balanceQuery.data ?? {};
 }
 
+import OpenRouterBalanceItem from '../SettingsTabs/Balance/OpenRouterBalanceItem';
+
 export function TokenCredits() {
   const { tokenCredits = 0 } = useBalance();
-  return <TokenCreditsItem tokenCredits={tokenCredits} />;
+  return (
+    <div className="w-full space-y-3">
+      <TokenCreditsItem tokenCredits={tokenCredits} />
+      <OpenRouterBalanceItem />
+    </div>
+  );
 }
 
 export function AutoRefill() {

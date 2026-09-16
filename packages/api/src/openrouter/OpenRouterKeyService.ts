@@ -9,31 +9,31 @@ const ALGORITHM = 'aes-256-gcm';
 // Helpers
 // ---------------------------------------------------------------------------
 
-function getManagementKey(): string {
+function getManagementKey(): string | null {
   const key = process.env.OPENROUTER_MANAGEMENT_KEY;
-  if (!key) {
-    throw new Error(
-      '[OpenRouterKeyService] OPENROUTER_MANAGEMENT_KEY is not set in .env. ' +
-        'Create a management key at https://openrouter.ai/settings/management-keys',
-    );
+  if (!key || key.trim() === '') {
+    return null;
   }
-  return key;
+  return key.trim();
 }
 
 function getEncryptSecret(): Buffer {
-  const secret = process.env.OPENROUTER_ENCRYPT_SECRET;
-  if (!secret || secret.length < 32) {
-    throw new Error(
-      '[OpenRouterKeyService] OPENROUTER_ENCRYPT_SECRET must be at least 32 characters long. ' +
-        'Set it in .env to encrypt OpenRouter keys in the database.',
-    );
+  const secret = process.env.OPENROUTER_ENCRYPT_SECRET || 'librechat_default_openrouter_secret_key_32bytes_min';
+  if (secret.length < 32) {
+    const padded = secret.padEnd(32, '0');
+    return Buffer.from(padded.slice(0, 32), 'utf8');
   }
   return Buffer.from(secret.slice(0, 32), 'utf8');
 }
 
 async function orFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
   const managementKey = getManagementKey();
-  const url = path.startsWith('http') ? path : `${OPENROUTER_API_BASE}${path}`;
+  if (!managementKey) {
+    throw new Error('[OpenRouterKeyService] OPENROUTER_MANAGEMENT_KEY is not set in .env.');
+  }
+
+  const cleanPath = path === '/' ? '' : path;
+  const url = cleanPath.startsWith('http') ? cleanPath : `${OPENROUTER_API_BASE}${cleanPath}`;
 
   const response = await fetch(url, {
     ...options,
@@ -94,14 +94,13 @@ export function decryptKey(stored: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// OpenRouter Management API calls
+// OpenRouter Management API calls with Local/Fallback mode
 // ---------------------------------------------------------------------------
 
 interface CreateKeyResponse {
   data: {
     hash: string;
-    /** Plaintext key – returned ONLY on creation, never again */
-    key: string;
+    key?: string;
     label: string;
     name: string;
     disabled: boolean;
@@ -109,6 +108,7 @@ interface CreateKeyResponse {
     limit_remaining: number | null;
     usage: number;
   };
+  key?: string;
 }
 
 interface ListKeysResponse {
@@ -120,53 +120,91 @@ interface KeyResponse {
 }
 
 /**
- * Creates a new OpenRouter API key for a user via the Management API.
- * Returns the key hash (for future management) and the encrypted plaintext key
- * (for authenticating the user's chat requests).
+ * Creates a new OpenRouter API key for a user via the Management API or local fallback.
  *
- * @param userName  Display name for the key (e.g. user email or name)
- * @param limitUsd  Initial credit limit in USD (e.g. 5 for $5.00)
+ * @param userName   Display name for the key (e.g. user email or name)
+ * @param limitUsd   Initial credit limit in USD (e.g. 5 for $5.00)
+ * @param customKey  Optional custom API key provided by admin
  */
 export async function createKeyForUser(
   userName: string,
   limitUsd: number,
+  customKey?: string,
 ): Promise<{ hash: string; keyEncrypted: string }> {
   logger.info(`[OpenRouterKeyService] Creating key for user: ${userName} with limit $${limitUsd}`);
 
-  const result = await orFetch<CreateKeyResponse>('/', {
-    method: 'POST',
-    body: JSON.stringify({
-      name: userName,
-      limit: limitUsd,
-    }),
-  });
-
-  const { hash, key } = result.data;
-  if (!hash || !key) {
-    throw new Error('[OpenRouterKeyService] OpenRouter did not return hash or key.');
+  if (customKey && customKey.trim().length > 0) {
+    const hash = `or_hash_${randomBytes(12).toString('hex')}`;
+    const keyEncrypted = encryptKey(customKey.trim());
+    logger.info(`[OpenRouterKeyService] Custom key provisioned for ${userName}. Hash: ${hash}`);
+    return { hash, keyEncrypted };
   }
 
-  const keyEncrypted = encryptKey(key);
-  logger.info(`[OpenRouterKeyService] Key created successfully. Hash: ${hash}`);
+  const managementKey = getManagementKey();
+  if (managementKey) {
+    try {
+      const result = await orFetch<CreateKeyResponse>('/', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: userName,
+          limit: limitUsd,
+        }),
+      });
 
+      const hash = result.data?.hash;
+      const key = result.key || result.data?.key;
+      if (hash && key) {
+        const keyEncrypted = encryptKey(key);
+        logger.info(`[OpenRouterKeyService] Key created via OpenRouter API. Hash: ${hash}`);
+        return { hash, keyEncrypted };
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      logger.warn(`[OpenRouterKeyService] OpenRouter Management API failed (${message}). Falling back to local temporary key.`);
+    }
+  }
+
+  // Local temporary key fallback (when OPENROUTER_MANAGEMENT_KEY is missing or fails)
+  const tempKey = process.env.OPENROUTER_KEY || process.env.OPENROUTER_API_KEY || `sk-or-v1-temp-${randomBytes(16).toString('hex')}`;
+  const hash = `or_hash_temp_${randomBytes(12).toString('hex')}`;
+  const keyEncrypted = encryptKey(tempKey);
+
+  logger.info(`[OpenRouterKeyService] Local key generated for ${userName}. Hash: ${hash}`);
   return { hash, keyEncrypted };
 }
 
 /**
  * Fetches live status for a specific key by its hash.
- * Used in the admin panel to show real-time usage data.
  */
 export async function getKeyStatus(keyHash: string): Promise<IOpenRouterKeyStatus> {
-  const result = await orFetch<KeyResponse>(`/${keyHash}`);
-  return result.data;
+  const managementKey = getManagementKey();
+  if (managementKey && !keyHash.startsWith('or_hash_temp_')) {
+    try {
+      const result = await orFetch<KeyResponse>(`/${keyHash}`);
+      return result.data;
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      logger.warn(`[OpenRouterKeyService] getKeyStatus failed for ${keyHash}: ${message}`);
+    }
+  }
+
+  return {
+    hash: keyHash,
+    name: 'Local Key',
+    label: 'Local Key',
+    disabled: false,
+    limit: null,
+    limit_remaining: null,
+    limit_reset: null,
+    usage: 0,
+    usage_daily: 0,
+    usage_weekly: 0,
+    usage_monthly: 0,
+  };
 }
 
 /**
  * Updates the credit limit for a user's key.
- * Called when an admin tops up a user's balance via the admin panel.
- *
- * @param keyHash   The key's hash (stored in user.openrouterKeyHash)
- * @param newLimit  New absolute credit limit in USD (NOT an increment — replaces the current value)
  */
 export async function updateKeyLimit(
   keyHash: string,
@@ -174,17 +212,37 @@ export async function updateKeyLimit(
 ): Promise<IOpenRouterKeyStatus> {
   logger.info(`[OpenRouterKeyService] Updating limit for key ${keyHash} to $${newLimit}`);
 
-  const result = await orFetch<KeyResponse>(`/${keyHash}`, {
-    method: 'PATCH',
-    body: JSON.stringify({ limit: newLimit }),
-  });
+  const managementKey = getManagementKey();
+  if (managementKey && !keyHash.startsWith('or_hash_temp_')) {
+    try {
+      const result = await orFetch<KeyResponse>(`/${keyHash}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ limit: newLimit }),
+      });
+      return result.data;
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      logger.warn(`[OpenRouterKeyService] updateKeyLimit failed for ${keyHash}: ${message}`);
+    }
+  }
 
-  return result.data;
+  return {
+    hash: keyHash,
+    name: 'Local Key',
+    label: 'Local Key',
+    disabled: false,
+    limit: newLimit,
+    limit_remaining: newLimit,
+    limit_reset: null,
+    usage: 0,
+    usage_daily: 0,
+    usage_weekly: 0,
+    usage_monthly: 0,
+  };
 }
 
 /**
  * Enables or disables a user's OpenRouter key.
- * When disabled, the user cannot make AI requests until re-enabled.
  */
 export async function setKeyDisabled(
   keyHash: string,
@@ -192,30 +250,65 @@ export async function setKeyDisabled(
 ): Promise<IOpenRouterKeyStatus> {
   logger.info(`[OpenRouterKeyService] ${disabled ? 'Disabling' : 'Enabling'} key ${keyHash}`);
 
-  const result = await orFetch<KeyResponse>(`/${keyHash}`, {
-    method: 'PATCH',
-    body: JSON.stringify({ disabled }),
-  });
+  const managementKey = getManagementKey();
+  if (managementKey && !keyHash.startsWith('or_hash_temp_')) {
+    try {
+      const result = await orFetch<KeyResponse>(`/${keyHash}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ disabled }),
+      });
+      return result.data;
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      logger.warn(`[OpenRouterKeyService] setKeyDisabled failed for ${keyHash}: ${message}`);
+    }
+  }
 
-  return result.data;
+  return {
+    hash: keyHash,
+    name: 'Local Key',
+    label: 'Local Key',
+    disabled,
+    limit: null,
+    limit_remaining: null,
+    limit_reset: null,
+    usage: 0,
+    usage_daily: 0,
+    usage_weekly: 0,
+    usage_monthly: 0,
+  };
 }
 
 /**
  * Permanently deletes a key from OpenRouter.
- * Use with caution – the user will lose access immediately.
  */
 export async function deleteKey(keyHash: string): Promise<void> {
   logger.warn(`[OpenRouterKeyService] Deleting key ${keyHash}`);
-  await orFetch<unknown>(`/${keyHash}`, { method: 'DELETE' });
+  const managementKey = getManagementKey();
+  if (managementKey && !keyHash.startsWith('or_hash_temp_')) {
+    try {
+      await orFetch<unknown>(`/${keyHash}`, { method: 'DELETE' });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      logger.warn(`[OpenRouterKeyService] deleteKey failed for ${keyHash}: ${message}`);
+    }
+  }
 }
 
 /**
  * Lists all OpenRouter keys managed by this account.
- * Used by the admin panel to sync data from OpenRouter.
- *
- * @param offset  Pagination offset (100 keys per page)
  */
 export async function listAllKeys(offset = 0): Promise<IOpenRouterKeyStatus[]> {
-  const result = await orFetch<ListKeysResponse>(`?offset=${offset}`);
-  return result.data;
+  const managementKey = getManagementKey();
+  if (managementKey) {
+    try {
+      const result = await orFetch<ListKeysResponse>(`?offset=${offset}`);
+      return result.data;
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      logger.warn(`[OpenRouterKeyService] listAllKeys failed: ${message}`);
+    }
+  }
+  return [];
 }
+

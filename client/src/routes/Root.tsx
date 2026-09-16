@@ -36,7 +36,7 @@ import useSidebarState from '~/hooks/Nav/useSidebarState';
 import { TermsAndConditionsModal } from '~/components/ui';
 import useDrawerSwipe from '~/hooks/Nav/useDrawerSwipe';
 import { useHealthCheck } from '~/data-provider';
-import { Banner } from '~/components/Banners';
+import { Banner, OpenRouterBalanceBanner } from '~/components/Banners';
 import store from '~/store';
 
 /** Isolates keyboard shortcut listeners so they only mount after auth. */
@@ -142,6 +142,7 @@ export default function Root() {
         <AssistantsMapContext.Provider value={assistantsMap}>
           <AgentsMapContext.Provider value={agentsMap}>
             <PromptGroupsProvider>
+              <OpenRouterBalanceBanner />
               <Banner onHeightChange={setBannerHeight} />
               <div className="flex" style={{ height: `calc(100dvh - ${bannerHeight}px)` }}>
                 <div

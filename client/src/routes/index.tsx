@@ -20,6 +20,7 @@ import WithRum from '~/lib/rum/WithRum';
 import ShareRoute from './ShareRoute';
 import ChatRoute from './ChatRoute';
 import Search from './Search';
+import OpenRouterAdminView from '~/components/Admin/OpenRouterAdminView';
 import Root from './Root';
 
 const AuthLayout = () => (
@@ -43,6 +44,11 @@ const loadSkillsView = () =>
 
 const loadInsightsView = () =>
   import('~/components/Insights').then((m) => ({
+    Component: m.default,
+  }));
+
+const loadOpenRouterAdminView = () =>
+  import('~/components/Admin').then((m) => ({
     Component: m.default,
   }));
 
@@ -159,6 +165,10 @@ export const router = createBrowserRouter(
             {
               path: 'insights',
               lazy: loadInsightsView,
+            },
+            {
+              path: 'admin/openrouter',
+              element: <OpenRouterAdminView />,
             },
             {
               path: 'skills/new',

@@ -15,11 +15,10 @@
 
 const express = require('express');
 const mongoose = require('mongoose');
-const { SystemCapabilities } = require('@librechat/data-schemas');
+const { SystemCapabilities, runAsSystem, logger } = require('@librechat/data-schemas');
 const { requireCapability } = require('~/server/middleware/roles/capabilities');
 const { requireJwtAuth } = require('~/server/middleware');
-const { findUser, updateUser } = require('~/models');
-const { logger } = require('@librechat/data-schemas');
+const { findUser, findUsers, countUsers, updateUser } = require('~/models');
 
 const {
   createKeyForUser,
@@ -43,6 +42,50 @@ function getTopUpModel() {
 }
 
 // ---------------------------------------------------------------------------
+// GET /api/admin/openrouter/stats
+// Aggregate summary statistics for OpenRouter key usage.
+// ---------------------------------------------------------------------------
+router.get('/stats', async (req, res) => {
+  try {
+    const result = await runAsSystem(async () => {
+      const users = await findUsers({});
+      let provisionedUsers = 0;
+      let totalLimit = 0;
+      let totalUsed = 0;
+      let disabledKeys = 0;
+
+      for (const u of users) {
+        if (u.openrouterKeyHash) {
+          provisionedUsers++;
+        }
+        if (u.openrouterCreditLimit) {
+          totalLimit += u.openrouterCreditLimit;
+        }
+        if (u.openrouterCreditUsed) {
+          totalUsed += u.openrouterCreditUsed;
+        }
+        if (u.openrouterKeyDisabled) {
+          disabledKeys++;
+        }
+      }
+
+      return {
+        totalUsers: users.length,
+        provisionedUsers,
+        totalLimit,
+        totalUsed,
+        disabledKeys,
+      };
+    });
+
+    return res.json(result);
+  } catch (err) {
+    logger.error('[adminOpenRouter] /stats error:', err);
+    return res.status(500).json({ error: 'Failed to calculate stats' });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // GET /api/admin/openrouter/users
 // List all users with their cached OR key stats.
 // ---------------------------------------------------------------------------
@@ -50,31 +93,35 @@ router.get('/users', async (req, res) => {
   try {
     const page = Math.max(1, parseInt(req.query.page ?? '1', 10));
     const limit = Math.min(100, parseInt(req.query.limit ?? '50', 10));
-    const skip = (page - 1) * limit;
+    const offset = (page - 1) * limit;
 
-    const users = await mongoose.models.User.find(
-      {},
-      {
-        _id: 1,
-        name: 1,
-        username: 1,
-        email: 1,
-        role: 1,
-        openrouterCreditLimit: 1,
-        openrouterCreditUsed: 1,
-        openrouterKeyDisabled: 1,
-        openrouterKeyHash: 1,
-        createdAt: 1,
-      },
-    )
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .lean();
+    const data = await runAsSystem(async () => {
+      const fields = [
+        '_id',
+        'name',
+        'username',
+        'email',
+        'role',
+        'openrouterCreditLimit',
+        'openrouterCreditUsed',
+        'openrouterKeyDisabled',
+        'openrouterKeyHash',
+        'createdAt',
+      ];
 
-    const total = await mongoose.models.User.countDocuments();
+      const [users, total] = await Promise.all([
+        findUsers({}, fields, {
+          sort: { createdAt: -1 },
+          offset,
+          limit,
+        }),
+        countUsers({}),
+      ]);
 
-    return res.json({ users, total, page, limit });
+      return { users, total };
+    });
+
+    return res.json({ users: data.users, total: data.total, page, limit });
   } catch (err) {
     logger.error('[adminOpenRouter] /users error:', err);
     return res.status(500).json({ error: 'Failed to list users' });
@@ -82,24 +129,70 @@ router.get('/users', async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// POST /api/admin/openrouter/provision-all
+// Mass-provision non-expiring OpenRouter keys for all users without keys.
+// Body: { limitUsd?: number }
+// ---------------------------------------------------------------------------
+router.post('/provision-all', async (req, res) => {
+  try {
+    const limitUsd = parseFloat(
+      req.body?.limitUsd ?? process.env.OPENROUTER_INITIAL_CREDIT_LIMIT ?? '10',
+    );
+
+    const data = await runAsSystem(async () => {
+      const users = await findUsers({});
+      const unprovisioned = users.filter((u) => !u.openrouterKeyHash);
+      let count = 0;
+
+      for (const user of unprovisioned) {
+        try {
+          const displayName = `${user.name || user.username || user.email} [LibreChat]`;
+          const { hash, keyEncrypted } = await createKeyForUser(displayName, limitUsd);
+          await updateUser(user._id.toString(), {
+            openrouterKeyHash: hash,
+            openrouterKeyEncrypted: keyEncrypted,
+            openrouterCreditLimit: limitUsd,
+            openrouterCreditUsed: 0,
+            openrouterKeyDisabled: false,
+          });
+          count++;
+        } catch (e) {
+          logger.error(`[provision-all] Failed for ${user.email}:`, e);
+        }
+      }
+
+      return { count, totalUnprovisioned: unprovisioned.length };
+    });
+
+    return res.json({ success: true, count: data.count, creditLimit: limitUsd });
+  } catch (err) {
+    logger.error('[adminOpenRouter] /provision-all error:', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // POST /api/admin/openrouter/provision/:userId
 // Provision (or re-provision) an OR key for a user who doesn't have one yet.
-// Body: { limitUsd: number }
+// Body: { limitUsd: number, customKey?: string }
 // ---------------------------------------------------------------------------
 router.post('/provision/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
+    const { customKey } = req.body;
     const limitUsd = parseFloat(
       req.body.limitUsd ?? process.env.OPENROUTER_INITIAL_CREDIT_LIMIT ?? '5',
     );
 
-    const user = await findUser({ _id: userId }, 'name username email openrouterKeyHash');
+    const user = await runAsSystem(() =>
+      findUser({ _id: userId }, 'name username email openrouterKeyHash'),
+    );
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
 
     const displayName = `${user.name || user.username || user.email} [LibreChat]`;
-    const { hash, keyEncrypted } = await createKeyForUser(displayName, limitUsd);
+    const { hash, keyEncrypted } = await createKeyForUser(displayName, limitUsd, customKey);
 
     await updateUser(userId, {
       openrouterKeyHash: hash,
@@ -133,9 +226,11 @@ router.post('/topup', async (req, res) => {
       return res.status(400).json({ error: 'userId and a positive amount are required' });
     }
 
-    const user = await findUser(
-      { _id: userId },
-      'name username email openrouterKeyHash openrouterCreditLimit',
+    const user = await runAsSystem(() =>
+      findUser(
+        { _id: userId },
+        'name username email openrouterKeyHash openrouterCreditLimit',
+      ),
     );
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
@@ -313,9 +408,9 @@ router.get('/topups/:userId', async (req, res) => {
 // ---------------------------------------------------------------------------
 router.get('/reveal/:userId', async (req, res) => {
   try {
-    const user = await mongoose.models.User.findById(req.params.userId)
-      .select('+openrouterKeyEncrypted +openrouterKeyHash')
-      .lean();
+    const user = await runAsSystem(() =>
+      findUser({ _id: req.params.userId }, '+openrouterKeyEncrypted +openrouterKeyHash'),
+    );
 
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
