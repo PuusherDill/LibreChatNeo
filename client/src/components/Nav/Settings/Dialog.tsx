@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import * as Tabs from '@radix-ui/react-tabs';
 import { X, ChevronLeft } from 'lucide-react';
 import { Button, useMediaQuery } from '@librechat/client';
@@ -13,13 +13,19 @@ import Content from './Content';
 import { TABS } from './types';
 import { cn } from '~/utils';
 
-export default function SettingsDialog({ open, onOpenChange }: TDialogProps) {
+export default function SettingsDialog({ open, onOpenChange, initialTab }: TDialogProps & { initialTab?: SettingsTab }) {
   const localize = useLocalize();
   const ctx = useSettingsContext();
   const isSmallScreen = useMediaQuery('(max-width: 767px)');
-  const [activeTab, setActiveTab] = useState<SettingsTab>(SettingsTabValues.GENERAL);
+  const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab ?? SettingsTabValues.GENERAL);
   const [query, setQuery] = useState('');
   const [mobileDetail, setMobileDetail] = useState(false);
+
+  useEffect(() => {
+    if (open && initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [open, initialTab]);
 
   const searching = query.trim().length > 0;
   const inDetail = isSmallScreen && mobileDetail && !searching;

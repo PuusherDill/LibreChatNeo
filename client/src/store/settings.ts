@@ -43,12 +43,11 @@ const localStorageAtoms = {
   // General settings
   sidebarExpanded: atomWithLocalStorage(
     'unifiedSidebarExpanded',
-    !isSmallViewport(),
+    false,
     /**
-     * The mobile drawer covers the viewport, so a persisted open state would
-     * launch the app into the navigation instead of the conversation.
-     * Normalized during atom initialization so the closed state reaches the
-     * first paint rather than animating shut after it.
+     * Sidebar is hidden by default on all devices.
+     * Users can toggle it from Settings → General → Layout.
+     * On mobile the drawer always starts closed regardless of saved state.
      */
     (saved) => (isSmallViewport() ? false : saved),
   ),

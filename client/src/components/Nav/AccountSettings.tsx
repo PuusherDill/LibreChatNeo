@@ -6,18 +6,29 @@ import {
   Archive,
   ChevronRight,
   CircleHelp,
+  Coins,
   Keyboard,
   LifeBuoy,
   LogOut,
   Scale,
   ShieldCheck,
 } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { request, SettingsTabValues } from 'librechat-data-provider';
+import type { SettingsTab } from './Settings/types';
 import { ArchivedChatsModal } from '~/components/Nav/SettingsTabs/General/ArchivedChatsModal';
 import { useGetStartupConfig, useGetUserBalance } from '~/data-provider';
 import { useAuthContext } from '~/hooks/AuthContext';
 import { useLocalize } from '~/hooks';
 import Settings from './Settings';
 import store from '~/store';
+
+interface IOpenRouterBalance {
+  balanceGel?: number;
+  remaining?: number;
+  creditLimit?: number;
+  creditUsed?: number;
+}
 
 function HelpSubmenu({
   helpAndFaqURL,
@@ -95,12 +106,23 @@ function AccountSettings({ collapsed = false }: { collapsed?: boolean }) {
   const { user, isAuthenticated, logout } = useAuthContext();
   const { data: startupConfig } = useGetStartupConfig();
   const balanceQuery = useGetUserBalance({
-    enabled: !!isAuthenticated && startupConfig?.balance?.enabled,
+    enabled: !!isAuthenticated && startupConfig?.balance?.enabled === true,
   });
+
+  const openrouterBalanceQuery = useQuery({
+    queryKey: ['openrouterBalance'],
+    queryFn: () => request.get<IOpenRouterBalance>('/api/openrouter/balance'),
+    enabled: !!isAuthenticated && startupConfig?.balance?.enabled === true,
+    refetchOnWindowFocus: true,
+  });
+
   const [showSettings, setShowSettings] = useState(false);
+  const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab | undefined>(undefined);
   const setShowShortcutsDialog = useSetRecoilState(store.showShortcutsDialog);
   const [showArchived, setShowArchived] = useState(false);
   const accountSettingsButtonRef = useRef<HTMLButtonElement>(null);
+
+  const displayGel = openrouterBalanceQuery.data?.balanceGel ?? ((balanceQuery.data?.tokenCredits ?? 0) * 2.7);
 
   return (
     <Menu.MenuProvider placement={collapsed ? 'right-end' : undefined}>
@@ -142,12 +164,23 @@ function AccountSettings({ collapsed = false }: { collapsed?: boolean }) {
           {user?.email ?? localize('com_nav_user')}
         </div>
         <DropdownMenuSeparator />
-        {startupConfig?.balance?.enabled === true && balanceQuery.data != null && (
+        {startupConfig?.balance?.enabled === true && (
           <>
-            <div className="text-token-text-secondary ml-3 mr-2 py-2 text-sm" role="note">
-              {localize('com_nav_balance')}:{' '}
-              {new Intl.NumberFormat().format(Math.round(balanceQuery.data.tokenCredits))}
-            </div>
+            <Menu.MenuItem
+              onClick={() => {
+                setSettingsInitialTab(SettingsTabValues.ACCOUNT as SettingsTab);
+                setShowSettings(true);
+              }}
+              className="select-item text-sm flex items-center justify-between cursor-pointer font-medium text-emerald-400 hover:bg-surface-hover"
+            >
+              <div className="flex items-center gap-2 text-text-primary">
+                <Coins className="icon-md text-emerald-500" aria-hidden="true" />
+                <span>{localize('com_nav_balance')}:</span>
+              </div>
+              <span className="font-bold font-mono text-emerald-400">
+                ₾{displayGel.toFixed(2)} GEL
+              </span>
+            </Menu.MenuItem>
             <DropdownMenuSeparator />
           </>
         )}
@@ -162,7 +195,10 @@ function AccountSettings({ collapsed = false }: { collapsed?: boolean }) {
           {localize('com_nav_archived_chats')}
         </Menu.MenuItem>
         <Menu.MenuItem
-          onClick={() => setShowSettings(true)}
+          onClick={() => {
+            setSettingsInitialTab(undefined);
+            setShowSettings(true);
+          }}
           className="select-item text-sm"
           data-testid="nav-settings"
         >
@@ -182,7 +218,13 @@ function AccountSettings({ collapsed = false }: { collapsed?: boolean }) {
           triggerRef={accountSettingsButtonRef}
         />
       )}
-      {showSettings && <Settings open={showSettings} onOpenChange={setShowSettings} />}
+      {showSettings && (
+        <Settings
+          open={showSettings}
+          onOpenChange={setShowSettings}
+          initialTab={settingsInitialTab}
+        />
+      )}
     </Menu.MenuProvider>
   );
 }

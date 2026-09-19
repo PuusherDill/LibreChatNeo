@@ -55,7 +55,24 @@ const openrouterTopUpSchema: Schema<IOpenRouterTopUp> = new Schema<IOpenRouterTo
     /** The OpenRouter key hash this transaction was applied to */
     openrouterKeyHash: {
       type: String,
-      required: true,
+      required: false,
+      default: '',
+    },
+    amountGel: {
+      type: Number,
+    },
+    status: {
+      type: String,
+      enum: ['pending', 'approved', 'rejected', 'completed'],
+      default: 'completed',
+    },
+    paymentMethod: {
+      type: String,
+      default: 'direct',
+    },
+    userComment: {
+      type: String,
+      default: '',
     },
     tenantId: {
       type: String,

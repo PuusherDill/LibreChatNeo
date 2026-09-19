@@ -29,18 +29,22 @@ const greetingAnimationTo = { opacity: 1, transform: 'translate3d(0,0,0)' };
 
 function getTextSizeClass(text: string | undefined | null) {
   if (!text) {
-    return 'text-xl sm:text-2xl';
+    return 'text-lg sm:text-xl md:text-2xl';
+  }
+
+  if (text.length < 35) {
+    return 'text-xl sm:text-3xl md:text-4xl';
   }
 
   if (text.length < 56) {
-    return 'text-2xl sm:text-4xl';
+    return 'text-lg sm:text-2xl md:text-3xl';
   }
 
   if (text.length < 70) {
-    return 'text-xl sm:text-2xl';
+    return 'text-base sm:text-xl md:text-2xl';
   }
 
-  return 'text-lg sm:text-base';
+  return 'text-sm sm:text-lg';
 }
 
 export default function Landing({ centerFormOnLanding }: { centerFormOnLanding: boolean }) {
@@ -153,7 +157,7 @@ export default function Landing({ centerFormOnLanding }: { centerFormOnLanding: 
     <div
       className={`flex h-full transform-gpu flex-col items-center justify-center pb-16 transition-all duration-200 ${centerFormOnLanding ? 'max-h-full sm:max-h-0' : 'max-h-full'} ${getDynamicMargin}`}
     >
-      <div ref={contentRef} className="flex flex-col items-center gap-0 p-2">
+      <div ref={contentRef} className="flex w-full max-w-full flex-col items-center gap-0 p-2 px-4 text-center">
         <div
           className={`flex ${textHasMultipleLines ? 'flex-col' : 'flex-col md:flex-row'} items-center justify-center gap-2`}
         >

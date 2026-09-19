@@ -1,0 +1,181 @@
+## Documentation Index
+
+Fetch the complete documentation index at: [/docs/llms.txt](https://openrouter.ai/docs/llms.txt)
+Use this file to discover all available pages before exploring further.
+[Skip to main content](https://openrouter.ai/docs/api-keys#content-area)
+[OpenRouter | Documentation home page](https://openrouter.ai)
+- [Models](https://openrouter.ai/models)
+- [Benchmarks](https://openrouter.ai/benchmarks)
+- [Chat](https://openrouter.ai/chat)
+- [Rankings](https://openrouter.ai/rankings)
+- [Apps](https://openrouter.ai/apps)
+- [Ori](https://openrouter.ai/ori)
+- [Sign In](https://openrouter.ai/sign-in)
+- [Sign In](https://openrouter.ai/sign-in)
+[Models](https://openrouter.ai/models)
+[Benchmarks](https://openrouter.ai/benchmarks)
+[Chat](https://openrouter.ai/chat)
+[Rankings](https://openrouter.ai/rankings)
+[Apps](https://openrouter.ai/apps)
+[Ori](https://openrouter.ai/ori)
+[Sign In](https://openrouter.ai/sign-in)
+[Sign In](https://openrouter.ai/sign-in)
+[Docs](https://openrouter.ai/docs/quickstart)
+[API Reference](https://openrouter.ai/docs/api_reference/overview)
+[Client SDKs](https://openrouter.ai/docs/client-sdks/overview)
+[Agent SDK](https://openrouter.ai/docs/agent-sdk/overview)
+[Cookbook](https://openrouter.ai/docs/cookbook/get-started/quickstart)
+
+### API Guides
+- [Overview](https://openrouter.ai/docs/api_reference/overview)
+- [Streaming](https://openrouter.ai/docs/api_reference/streaming)
+- [Embeddings](https://openrouter.ai/docs/api_reference/embeddings)
+- [Limits](https://openrouter.ai/docs/api_reference/limits)
+- [Authentication](https://openrouter.ai/docs/api_reference/authentication)
+- [Parameters](https://openrouter.ai/docs/api_reference/parameters)
+- [Errors and Debugging](https://openrouter.ai/docs/api_reference/errors-and-debugging)
+- Responses API
+[Overview](https://openrouter.ai/docs/api_reference/overview)
+[Streaming](https://openrouter.ai/docs/api_reference/streaming)
+[Embeddings](https://openrouter.ai/docs/api_reference/embeddings)
+[Limits](https://openrouter.ai/docs/api_reference/limits)
+[Authentication](https://openrouter.ai/docs/api_reference/authentication)
+[Parameters](https://openrouter.ai/docs/api_reference/parameters)
+[Errors and Debugging](https://openrouter.ai/docs/api_reference/errors-and-debugging)
+
+### Versioning
+- [API Versioning](https://openrouter.ai/docs/api_reference/versioning)
+- [API Changelog](https://openrouter.ai/docs/changelog)
+[API Versioning](https://openrouter.ai/docs/api_reference/versioning)
+[API Changelog](https://openrouter.ai/docs/changelog)
+
+### API Reference
+- Analytics
+- TTS
+- STT
+- OAuth
+- Benchmarks
+- BYOK
+- Chat
+- Classifications
+- Containers
+- Credits
+- Datasets
+- Embeddings
+- Endpoints
+- Files
+- Generations
+- Guardrails
+- Images
+- API Keys
+- Anthropic Messages
+- Models
+- Observability
+- Organization
+- Presets
+- Providers
+- Rerank
+- Responses
+- SCIM
+- Video Generation
+- Workspaces
+
+## On this page
+
+- [Using an API key](https://openrouter.ai/docs/api-keys#using-an-api-key)
+- [If your key has been exposed](https://openrouter.ai/docs/api-keys#if-your-key-has-been-exposed)
+[Using an API key](https://openrouter.ai/docs/api-keys#using-an-api-key)
+[If your key has been exposed](https://openrouter.ai/docs/api-keys#if-your-key-has-been-exposed)
+
+# Authentication
+
+API Authentication
+
+```
+curl
+```
+
+[OpenAI SDK](https://platform.openai.com/docs/frameworks)
+[OAuth](https://openrouter.ai/docs/guides/overview/auth/oauth)
+
+## [​](https://openrouter.ai/docs/api-keys#using-an-api-key)Using an API key
+
+[​](https://openrouter.ai/docs/api-keys#using-an-api-key)
+[first create your key](https://openrouter.ai/keys)
+
+```
+Authorization
+```
+
+
+```
+api_base
+```
+
+
+```
+https://openrouter.ai/api/v1
+```
+
+
+```
+apiKey
+```
+
+
+```
+import { OpenRouter } from '@openrouter/sdk'; const openRouter = new OpenRouter({ apiKey: '<OPENROUTER_API_KEY>', httpReferer: '<YOUR_SITE_URL>', // Optional. Site URL for rankings on openrouter.ai. appTitle: '<YOUR_SITE_NAME>', // Optional. Site title for rankings on openrouter.ai. }); const completion = await openRouter.chat.send({ chatRequest: { model: 'openai/gpt-5.2', messages: [{ role: 'user', content: 'Say this is a test' }], stream: false, }, }); if (completion instanceof ReadableStream) { throw new Error('Expected a non-streaming response'); } console.log(completion.choices[0].message);
+```
+
+
+```
+import { OpenRouter } from '@openrouter/sdk'; const openRouter = new OpenRouter({ apiKey: '<OPENROUTER_API_KEY>', httpReferer: '<YOUR_SITE_URL>', // Optional. Site URL for rankings on openrouter.ai. appTitle: '<YOUR_SITE_NAME>', // Optional. Site title for rankings on openrouter.ai. }); const completion = await openRouter.chat.send({ chatRequest: { model: 'openai/gpt-5.2', messages: [{ role: 'user', content: 'Say this is a test' }], stream: false, }, }); if (completion instanceof ReadableStream) { throw new Error('Expected a non-streaming response'); } console.log(completion.choices[0].message);
+```
+
+
+```
+from openai import OpenAI client = OpenAI( base_url="https://openrouter.ai/api/v1", api_key="<OPENROUTER_API_KEY>", ) response = client.chat.completions.create( extra_headers={ "HTTP-Referer": "<YOUR_SITE_URL>", # Optional. Site URL for rankings on openrouter.ai. "X-OpenRouter-Title": "<YOUR_SITE_NAME>", # Optional. Site title for rankings on openrouter.ai. }, model="openai/gpt-5.2", messages=[ {"role": "system", "content": "You are a helpful assistant."}, {"role": "user", "content": "Hello!"} ], ) reply = response.choices[0].message
+```
+
+
+```
+from openai import OpenAI client = OpenAI( base_url="https://openrouter.ai/api/v1", api_key="<OPENROUTER_API_KEY>", ) response = client.chat.completions.create( extra_headers={ "HTTP-Referer": "<YOUR_SITE_URL>", # Optional. Site URL for rankings on openrouter.ai. "X-OpenRouter-Title": "<YOUR_SITE_NAME>", # Optional. Site title for rankings on openrouter.ai. }, model="openai/gpt-5.2", messages=[ {"role": "system", "content": "You are a helpful assistant."}, {"role": "user", "content": "Hello!"} ], ) reply = response.choices[0].message
+```
+
+
+```
+import OpenAI from 'openai'; const openai = new OpenAI({ baseURL: 'https://openrouter.ai/api/v1', apiKey: '<OPENROUTER_API_KEY>', defaultHeaders: { 'HTTP-Referer': '<YOUR_SITE_URL>', // Optional. Site URL for rankings on openrouter.ai. 'X-OpenRouter-Title': '<YOUR_SITE_NAME>', // Optional. Site title for rankings on openrouter.ai. }, }); async function main() { const completion = await openai.chat.completions.create({ model: 'openai/gpt-5.2', messages: [{ role: 'user', content: 'Say this is a test' }], }); console.log(completion.choices[0].message); } main();
+```
+
+
+```
+import OpenAI from 'openai'; const openai = new OpenAI({ baseURL: 'https://openrouter.ai/api/v1', apiKey: '<OPENROUTER_API_KEY>', defaultHeaders: { 'HTTP-Referer': '<YOUR_SITE_URL>', // Optional. Site URL for rankings on openrouter.ai. 'X-OpenRouter-Title': '<YOUR_SITE_NAME>', // Optional. Site title for rankings on openrouter.ai. }, }); async function main() { const completion = await openai.chat.completions.create({ model: 'openai/gpt-5.2', messages: [{ role: 'user', content: 'Say this is a test' }], }); console.log(completion.choices[0].message); } main();
+```
+
+
+```
+fetch('https://openrouter.ai/api/v1/chat/completions', { method: 'POST', headers: { Authorization: 'Bearer <OPENROUTER_API_KEY>', 'HTTP-Referer': '<YOUR_SITE_URL>', // Optional. Site URL for rankings on openrouter.ai. 'X-OpenRouter-Title': '<YOUR_SITE_NAME>', // Optional. Site title for rankings on openrouter.ai. 'Content-Type': 'application/json', }, body: JSON.stringify({ model: 'openai/gpt-5.2', messages: [ { role: 'user', content: 'What is the meaning of life?', }, ], }), });
+```
+
+## [​](https://openrouter.ai/docs/api-keys#using-an-api-key)Using an API key
+```
+fetch('https://openrouter.ai/api/v1/chat/completions', { method: 'POST', headers: { Authorization: 'Bearer <OPENROUTER_API_KEY>', 'HTTP-Referer': '<YOUR_SITE_URL>', // Optional. Site URL for rankings on openrouter.ai. 'X-OpenRouter-Title': '<YOUR_SITE_NAME>', // Optional. Site title for rankings on openrouter.ai. 'Content-Type': 'application/json', }, body: JSON.stringify({ model: 'openai/gpt-5.2', messages: [ { role: 'user', content: 'What is the meaning of life?', }, ], }), });
+```
+
+
+```
+curl https://openrouter.ai/api/v1/chat/completions \ -H "Content-Type: application/json" \ -H "Authorization: Bearer $OPENROUTER_API_KEY" \ -d '{ "model": "openai/gpt-5.2", "messages": [ {"role": "system", "content": "You are a helpful assistant."}, {"role": "user", "content": "Hello!"} ] }'
+```
+
+
+```
+curl https://openrouter.ai/api/v1/chat/completions \ -H "Content-Type: application/json" \ -H "Authorization: Bearer $OPENROUTER_API_KEY" \ -d '{ "model": "openai/gpt-5.2", "messages": [ {"role": "system", "content": "You are a helpful assistant."}, {"role": "user", "content": "Hello!"} ] }'
+```
+
+[see this example from OpenAI](https://github.com/openai/openai-cookbook/blob/main/examples/How_to_stream_completions.ipynb)
+
+## [​](https://openrouter.ai/docs/api-keys#if-your-key-has-been-exposed)If your key has been exposed
+[​](https://openrouter.ai/docs/api-keys#if-your-key-has-been-exposed)
+[your key settings page](https://openrouter.ai/settings/keys)
+[Limits](https://openrouter.ai/docs/api_reference/limits)
+[Parameters](https://openrouter.ai/docs/api_reference/parameters)

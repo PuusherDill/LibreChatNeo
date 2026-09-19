@@ -931,6 +931,12 @@ export function useShortcutAriaKey(actionId?: ShortcutActionId): string | undefi
 
 export function useShortcutHint(actionId: ShortcutActionId | undefined, label: string): string {
   const display = useShortcutDisplay(actionId);
+  const isTouchOrMobile =
+    typeof window !== 'undefined' &&
+    (window.matchMedia('(pointer: coarse)').matches || window.innerWidth < 768);
+  if (isTouchOrMobile) {
+    return label;
+  }
   return display ? `${label} (${display})` : label;
 }
 

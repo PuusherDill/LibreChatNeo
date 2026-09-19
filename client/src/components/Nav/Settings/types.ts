@@ -1,6 +1,7 @@
 import { createElement } from 'react';
 import { MessageSquare, Info } from 'lucide-react';
 import { SettingsTabValues } from 'librechat-data-provider';
+import type { TUser } from 'librechat-data-provider';
 import { GearIcon, DataIcon, UserIcon, SpeechIcon } from '@librechat/client';
 import type { ComponentType, ReactNode } from 'react';
 import type { TranslationKeys } from '~/hooks';
@@ -53,6 +54,7 @@ export interface SettingsContextValue {
   engineTTS: string;
   langfuseConnectionAccess: boolean;
   adminPanelURL: string;
+  user?: TUser;
 }
 
 export interface SettingEntry {

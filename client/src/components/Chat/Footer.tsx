@@ -85,13 +85,8 @@ function Footer({ className, startupConfig, configuredOnly = false }: FooterProp
   );
 
   const configuredFooter = typeof config?.customFooter === 'string' ? config.customFooter : null;
-  /** The generic disclaimer is the part a conversation drops; operator content is not. */
-  const genericFooter = configuredOnly
-    ? ''
-    : '[LibreChat ' +
-      Constants.VERSION +
-      '](https://librechat.ai) - ' +
-      localize('com_ui_latest_footer');
+  /** The generic disclaimer is dropped per configuration requirement. */
+  const genericFooter = '';
   const mainContent = configuredFooter ?? genericFooter;
   const mainContentParts = mainContent === '' ? [] : mainContent.split('|');
 

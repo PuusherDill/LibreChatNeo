@@ -1,15 +1,13 @@
-import { memo, useMemo } from 'react';
+import { memo } from 'react';
 import { useRecoilValue } from 'recoil';
 import { useParams } from 'react-router-dom';
 import {
-  getConfigDefaults,
   Constants,
   PermissionTypes,
   Permissions,
 } from 'librechat-data-provider';
-import { OpenSidebar, PresetsMenu, NewChat, HeaderMenu } from './Menus';
+import { OpenSidebar, NewChat, HeaderMenu } from './Menus';
 import { TemporaryChat, TemporaryChatIndicator } from './TemporaryChat';
-import ModelSelector from './Menus/Endpoints/ModelSelector';
 import { TraceButton, useTraceControl } from './Trace';
 import { useGetStartupConfig } from '~/data-provider';
 import ExportAndShareMenu from './ExportAndShareMenu';
@@ -20,7 +18,6 @@ import { useHasAccess } from '~/hooks';
 import { cn } from '~/utils';
 import store from '~/store';
 
-const defaultInterface = getConfigDefaults().interface;
 
 /**
  * Three zones in a single DOM order that serves both layouts: hidden items
@@ -46,10 +43,7 @@ function Header({
   const { conversationId: routeConversationId } = useParams();
   const isNewChat = routeConversationId == null || routeConversationId === Constants.NEW_CONVO;
 
-  const interfaceConfig = useMemo(
-    () => startupConfig?.interface ?? defaultInterface,
-    [startupConfig],
-  );
+
 
   const hasAccessToBookmarks = useHasAccess({
     permissionType: PermissionTypes.BOOKMARKS,
@@ -69,7 +63,7 @@ function Header({
   /** Child threads are view-only records of their parent's run and have no trace of their own. */
   const trace = useTraceControl({
     conversationId: isNewChat ? null : routeConversationId,
-    traceViewer: interfaceConfig.traceViewer,
+    traceViewer: startupConfig?.interface?.traceViewer,
     isSubmitting,
     enabled: parentConversationId == null,
   });
@@ -91,10 +85,6 @@ function Header({
       >
         {parentConversationId != null && (
           <SubagentThreadLink threadId={parentConversationId} labelClassName="hidden lg:inline" />
-        )}
-        {!readOnly && <ModelSelector startupConfig={startupConfig} />}
-        {!readOnly && interfaceConfig.presets === true && interfaceConfig.modelSelect === true && (
-          <PresetsMenu />
         )}
         {hasAccessToBookmarks === true && (
           <div className="hidden items-center md:flex">

@@ -214,8 +214,60 @@ router.get('/history', async (req, res) => {
     return res.json({ records });
   } catch (err) {
     logger.error('[openrouterUser] /history error:', err);
-    return res.status(500).json({ error: 'Failed to fetch transaction history' });
+    return res.status(500).json({ error: 'Ошибка загрузки истории операций' });
+  }
+});
+// ---------------------------------------------------------------------------
+// POST /api/openrouter/card-request
+// Submit a manual card payment request for admin review
+// ---------------------------------------------------------------------------
+router.post('/card-request', async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const gelPerUsd = parseFloat(process.env.GEL_PER_USD) || 2.70;
+    const minTopUpGel = parseFloat(process.env.MIN_TOPUP_GEL) || 10;
+    const { amountGel: inputGel, userComment = '', transactionType = 'topup' } = req.body;
+
+    const amountGel = parseFloat(inputGel);
+    if (isNaN(amountGel) || amountGel < minTopUpGel) {
+      return res.status(400).json({ error: `Минимальная сумма пополнения — ${minTopUpGel} GEL` });
+    }
+
+    const amountUsd = parseFloat((amountGel / gelPerUsd).toFixed(4));
+    const user = await runAsSystem(() =>
+      findUser({ _id: userId }, 'openrouterCreditLimit openrouterKeyHash'),
+    );
+
+    const prevLimitUsd = user?.openrouterCreditLimit ?? 0;
+    const TopUp = getTopUpModel();
+
+    const record = await TopUp.create({
+      user: userId,
+      amount: amountUsd,
+      amountGel,
+      previousLimit: prevLimitUsd,
+      newLimit: prevLimitUsd + amountUsd,
+      note: `Заявка на пополнение картой (${amountGel} GEL)`,
+      addedBy: userId,
+      transactionType,
+      status: 'pending',
+      paymentMethod: 'card',
+      userComment,
+      openrouterKeyHash: user?.openrouterKeyHash || '',
+    });
+
+    logger.info(`[openrouterUser] Card payment request created by ${req.user.email} for ${amountGel} GEL`);
+
+    return res.json({
+      success: true,
+      message: 'Заявка на пополнение картой успешно отправлена на проверку!',
+      transaction: record.toObject(),
+    });
+  } catch (err) {
+    logger.error('[openrouterUser] /card-request error:', err);
+    return res.status(500).json({ error: err.message || 'Ошибка создания заявки' });
   }
 });
 
 module.exports = router;
+

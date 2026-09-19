@@ -59,6 +59,7 @@ export function useSettingsContext(): SettingsContextValue {
       engineTTS,
       langfuseConnectionAccess,
       adminPanelURL,
+      user,
     }),
     [
       balanceEnabled,
@@ -76,6 +77,7 @@ export function useSettingsContext(): SettingsContextValue {
       engineTTS,
       langfuseConnectionAccess,
       adminPanelURL,
+      user,
     ],
   );
 }

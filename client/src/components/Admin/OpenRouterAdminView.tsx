@@ -90,12 +90,15 @@ export default function OpenRouterAdminView() {
   const [revealedKey, setRevealedKey] = useState<string | null>(null);
   const [revealingUser, setRevealingUser] = useState<IUserORData | null>(null);
 
+  const [pendingRequests, setPendingRequests] = useState<any[]>([]);
+
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [usersData, statsData] = await Promise.all([
+      const [usersData, statsData, pendingData] = await Promise.all([
         request.get<any>('/api/admin/openrouter/users?limit=100'),
         request.get<any>('/api/admin/openrouter/stats'),
+        request.get<any>('/api/admin/openrouter/pending'),
       ]);
 
       if (usersData?.users) {
@@ -103,6 +106,9 @@ export default function OpenRouterAdminView() {
       }
       if (statsData) {
         setStats(statsData);
+      }
+      if (pendingData?.records) {
+        setPendingRequests(pendingData.records);
       }
     } catch (err) {
       showToast({ message: 'Ошибка при загрузке данных OpenRouter Admin', status: 'error' });
@@ -115,6 +121,28 @@ export default function OpenRouterAdminView() {
     fetchData();
   }, [fetchData]);
 
+  // Handle Approve Pending Request
+  const handleApprove = async (id: string) => {
+    try {
+      await request.post(`/api/admin/openrouter/approve/${id}`);
+      showToast({ message: 'Заявка на пополнение успешно одобрена! Баланс зачислен.', status: 'success' });
+      fetchData();
+    } catch (err: any) {
+      showToast({ message: err.message || 'Ошибка при одобрении', status: 'error' });
+    }
+  };
+
+  // Handle Reject Pending Request
+  const handleReject = async (id: string) => {
+    try {
+      await request.post(`/api/admin/openrouter/reject/${id}`);
+      showToast({ message: 'Заявка отклонена.', status: 'info' });
+      fetchData();
+    } catch (err: any) {
+      showToast({ message: err.message || 'Ошибка при отклонении', status: 'error' });
+    }
+  };
+
   // Handle Top-Up Submit
   const handleTopUpSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -122,7 +150,7 @@ export default function OpenRouterAdminView() {
 
     setIsTopUpSubmitting(true);
     try {
-      const data = await request.post<any>('/api/admin/openrouter/topup', {
+      const data = await request.post('/api/admin/openrouter/topup', {
         userId: topUpUser._id,
         amount: parseFloat(topUpAmount),
         note: topUpNote,
@@ -147,7 +175,7 @@ export default function OpenRouterAdminView() {
 
     setIsProvisionSubmitting(true);
     try {
-      await request.post<any>(`/api/admin/openrouter/provision/${provisionUser._id}`, {
+      await request.post(`/api/admin/openrouter/provision/${provisionUser._id}`, {
         limitUsd: parseFloat(provisionLimit),
         customKey: customKey.trim() || undefined,
       });
@@ -168,7 +196,7 @@ export default function OpenRouterAdminView() {
     if (!user.openrouterKeyHash) return;
     const newDisabled = !user.openrouterKeyDisabled;
     try {
-      await request.patch<any>(`/api/admin/openrouter/key/${user.openrouterKeyHash}`, {
+      await request.patch(`/api/admin/openrouter/key/${user.openrouterKeyHash}`, {
         disabled: newDisabled,
       });
 
@@ -212,7 +240,7 @@ export default function OpenRouterAdminView() {
   const handleProvisionAll = async () => {
     try {
       setLoading(true);
-      const data = await request.post<any>('/api/admin/openrouter/provision-all', { limitUsd: 10 });
+      const data = await request.post('/api/admin/openrouter/provision-all', { limitUsd: 10 });
       showToast({ message: `Ключи успешно созданы для ${data.count} пользователей!`, status: 'success' });
       fetchData();
     } catch (err: any) {
@@ -240,7 +268,7 @@ export default function OpenRouterAdminView() {
             <Zap className="text-amber-500 size-6" /> OpenRouter Management Admin
           </h1>
           <p className="text-sm text-text-secondary mt-1">
-            Управление лимитами, пополнениями и персональными API ключами пользователей
+            Управление лимитами, пополнениями и заявками на оплату по картам
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -268,26 +296,24 @@ export default function OpenRouterAdminView() {
         </div>
 
         <div className="p-4 rounded-xl border border-border-subtle bg-surface-secondary flex items-center gap-4">
-          <div className="p-3 bg-emerald-500/10 text-emerald-500 rounded-lg">
+          <div className="p-3 bg-amber-500/10 text-amber-500 rounded-lg">
             <CreditCard className="size-6" />
+          </div>
+          <div>
+            <div className="text-xs text-text-secondary font-medium">Заявки по картам</div>
+            <div className="text-xl font-bold text-amber-400">{pendingRequests.length}</div>
+            <div className="text-xs text-amber-500 font-semibold">Ожидают проверки</div>
+          </div>
+        </div>
+
+        <div className="p-4 rounded-xl border border-border-subtle bg-surface-secondary flex items-center gap-4">
+          <div className="p-3 bg-emerald-500/10 text-emerald-500 rounded-lg">
+            <DollarSign className="size-6" />
           </div>
           <div>
             <div className="text-xs text-text-secondary font-medium">Выделенный лимит</div>
             <div className="text-xl font-bold text-text-primary">${stats.totalLimit.toFixed(2)}</div>
             <div className="text-xs text-emerald-500">суммарно USD</div>
-          </div>
-        </div>
-
-        <div className="p-4 rounded-xl border border-border-subtle bg-surface-secondary flex items-center gap-4">
-          <div className="p-3 bg-amber-500/10 text-amber-500 rounded-lg">
-            <DollarSign className="size-6" />
-          </div>
-          <div>
-            <div className="text-xs text-text-secondary font-medium">Использовано</div>
-            <div className="text-xl font-bold text-text-primary">${stats.totalUsed.toFixed(2)}</div>
-            <div className="text-xs text-amber-500 font-semibold">
-              Остаток: ${(stats.totalLimit - stats.totalUsed).toFixed(2)}
-            </div>
           </div>
         </div>
 
@@ -302,6 +328,67 @@ export default function OpenRouterAdminView() {
           </div>
         </div>
       </div>
+
+      {/* Pending Card Requests Section */}
+      {pendingRequests.length > 0 && (
+        <div className="mb-8 p-5 rounded-2xl border border-amber-500/30 bg-amber-500/5 space-y-3">
+          <h2 className="font-bold text-base text-amber-400 flex items-center gap-2">
+            <CreditCard className="size-5" /> Заявки на пополнение картой ({pendingRequests.length})
+          </h2>
+          <div className="overflow-x-auto rounded-xl border border-border-subtle bg-surface-secondary">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-surface-tertiary text-text-secondary text-xs uppercase font-semibold border-b border-border-subtle">
+                <tr>
+                  <th className="px-4 py-3">Пользователь</th>
+                  <th className="px-4 py-3">Сумма (GEL / USD)</th>
+                  <th className="px-4 py-3">Комментарий / Чек</th>
+                  <th className="px-4 py-3">Дата</th>
+                  <th className="px-4 py-3 text-right">Действие</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border-subtle">
+                {pendingRequests.map((req) => (
+                  <tr key={req._id} className="hover:bg-surface-tertiary/50 transition-colors">
+                    <td className="px-4 py-3 font-medium text-text-primary">
+                      {req.user?.name || req.user?.username || req.user?.email || 'Пользователь'}
+                      <div className="text-xs text-text-secondary font-normal">{req.user?.email}</div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="font-bold text-emerald-400">₾{req.amountGel?.toFixed(2) ?? '0.00'} GEL</div>
+                      <div className="text-xs text-text-secondary">~ ${req.amount.toFixed(2)} USD</div>
+                    </td>
+                    <td className="px-4 py-3 text-xs text-text-secondary italic max-w-xs truncate">
+                      "{req.userComment || req.note || 'Без комментария'}"
+                    </td>
+                    <td className="px-4 py-3 text-xs text-text-secondary font-mono">
+                      {new Date(req.createdAt).toLocaleString('ru-RU')}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <Button
+                          size="sm"
+                          onClick={() => handleApprove(req._id)}
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 py-1 font-semibold"
+                        >
+                          Одобрить
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleReject(req._id)}
+                          className="border-red-500/30 text-red-400 hover:bg-red-500/10 text-xs px-3 py-1"
+                        >
+                          Отклонить
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Filter / Search Bar */}
       <div className="flex items-center justify-between gap-4 mb-4">
@@ -463,80 +550,81 @@ export default function OpenRouterAdminView() {
           <OGDialogTemplate
             title={`Пополнение баланса: ${topUpUser.name || topUpUser.email}`}
             showCloseButton={true}
-          >
-            <form onSubmit={handleTopUpSubmit} className="space-y-4 pt-2">
-              <div>
-                <Label>Текущий лимит: ${topUpUser.openrouterCreditLimit ?? 0}</Label>
-              </div>
-
-              <div>
-                <Label>Тип пополнения</Label>
-                <div className="flex gap-4 mt-1">
-                  <label className="flex items-center gap-2 text-sm cursor-pointer">
-                    <input
-                      type="radio"
-                      name="transType"
-                      checked={transType === 'topup'}
-                      onChange={() => setTransType('topup')}
-                    />
-                    Разовое пополнение ($)
-                  </label>
-                  <label className="flex items-center gap-2 text-sm cursor-pointer">
-                    <input
-                      type="radio"
-                      name="transType"
-                      checked={transType === 'subscription'}
-                      onChange={() => setTransType('subscription')}
-                    />
-                    Подписка (ежемесячно)
-                  </label>
-                </div>
-              </div>
-
-              <div>
-                <Label>Сумма пополнения (USD)</Label>
-                <Input
-                  type="number"
-                  step="0.5"
-                  min="0.5"
-                  value={topUpAmount}
-                  onChange={(e) => setTopUpAmount(e.target.value)}
-                  required
-                />
-              </div>
-
-              {transType === 'subscription' && (
+            main={
+              <form onSubmit={handleTopUpSubmit} className="space-y-4 pt-2">
                 <div>
-                  <Label>Длительность подписки (месяцев)</Label>
+                  <Label>Текущий лимит: ${topUpUser.openrouterCreditLimit ?? 0}</Label>
+                </div>
+
+                <div>
+                  <Label>Тип пополнения</Label>
+                  <div className="flex gap-4 mt-1">
+                    <label className="flex items-center gap-2 text-sm cursor-pointer">
+                      <input
+                        type="radio"
+                        name="transType"
+                        checked={transType === 'topup'}
+                        onChange={() => setTransType('topup')}
+                      />
+                      Разовое пополнение ($)
+                    </label>
+                    <label className="flex items-center gap-2 text-sm cursor-pointer">
+                      <input
+                        type="radio"
+                        name="transType"
+                        checked={transType === 'subscription'}
+                        onChange={() => setTransType('subscription')}
+                      />
+                      Подписка (ежемесячно)
+                    </label>
+                  </div>
+                </div>
+
+                <div>
+                  <Label>Сумма пополнения (USD)</Label>
                   <Input
                     type="number"
-                    min="1"
-                    max="12"
-                    value={subMonths}
-                    onChange={(e) => setSubMonths(e.target.value)}
+                    step="0.5"
+                    min="0.5"
+                    value={topUpAmount}
+                    onChange={(e) => setTopUpAmount(e.target.value)}
+                    required
                   />
                 </div>
-              )}
 
-              <div>
-                <Label>Примечание / Комментарий от админа</Label>
-                <Input
-                  placeholder="Например: Пополнение через Telegram Admin"
-                  value={topUpNote}
-                  onChange={(e) => setTopUpNote(e.target.value)}
-                />
-              </div>
+                {transType === 'subscription' && (
+                  <div>
+                    <Label>Длительность подписки (месяцев)</Label>
+                    <Input
+                      type="number"
+                      min="1"
+                      max="12"
+                      value={subMonths}
+                      onChange={(e) => setSubMonths(e.target.value)}
+                    />
+                  </div>
+                )}
 
-              <div className="flex justify-end gap-2 pt-4">
-                <Button type="button" variant="outline" onClick={() => setTopUpUser(null)}>
-                  Отмена
-                </Button>
-                <Button type="submit" disabled={isTopUpSubmitting} className="bg-emerald-600 hover:bg-emerald-700 text-white">
-                  {isTopUpSubmitting ? <Spinner className="size-4" /> : 'Пополнить баланс'}
-                </Button>
-              </div>
-            </form>
-          </OGDialogTemplate>
+                <div>
+                  <Label>Примечание / Комментарий от админа</Label>
+                  <Input
+                    placeholder="Например: Пополнение через Telegram Admin"
+                    value={topUpNote}
+                    onChange={(e) => setTopUpNote(e.target.value)}
+                  />
+                </div>
+
+                <div className="flex justify-end gap-2 pt-4">
+                  <Button type="button" variant="outline" onClick={() => setTopUpUser(null)}>
+                    Отмена
+                  </Button>
+                  <Button type="submit" disabled={isTopUpSubmitting} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+                    {isTopUpSubmitting ? <Spinner className="size-4" /> : 'Пополнить баланс'}
+                  </Button>
+                </div>
+              </form>
+            }
+          />
         </OGDialog>
       )}
 
@@ -546,42 +634,43 @@ export default function OpenRouterAdminView() {
           <OGDialogTemplate
             title={`Выдача OpenRouter ключа: ${provisionUser.name || provisionUser.email}`}
             showCloseButton={true}
-          >
-            <form onSubmit={handleProvisionSubmit} className="space-y-4 pt-2">
-              <div>
-                <Label>Стартовый лимит (USD)</Label>
-                <Input
-                  type="number"
-                  step="1"
-                  min="1"
-                  value={provisionLimit}
-                  onChange={(e) => setProvisionLimit(e.target.value)}
-                  required
-                />
-              </div>
+            main={
+              <form onSubmit={handleProvisionSubmit} className="space-y-4 pt-2">
+                <div>
+                  <Label>Стартовый лимит (USD)</Label>
+                  <Input
+                    type="number"
+                    step="1"
+                    min="1"
+                    value={provisionLimit}
+                    onChange={(e) => setProvisionLimit(e.target.value)}
+                    required
+                  />
+                </div>
 
-              <div>
-                <Label>Свой API ключ (необязательно)</Label>
-                <Input
-                  placeholder="Оставьте пустым для авто-генерации (sk-or-v1-...)"
-                  value={customKey}
-                  onChange={(e) => setCustomKey(e.target.value)}
-                />
-                <p className="text-xs text-text-secondary mt-1">
-                  Если указать вручную, ключ сохранится в зашифрованном виде для этого пользователя.
-                </p>
-              </div>
+                <div>
+                  <Label>Свой API ключ (необязательно)</Label>
+                  <Input
+                    placeholder="Оставьте пустым для авто-генерации (sk-or-v1-...)"
+                    value={customKey}
+                    onChange={(e) => setCustomKey(e.target.value)}
+                  />
+                  <p className="text-xs text-text-secondary mt-1">
+                    Если указать вручную, ключ сохранится в зашифрованном виде для этого пользователя.
+                  </p>
+                </div>
 
-              <div className="flex justify-end gap-2 pt-4">
-                <Button type="button" variant="outline" onClick={() => setProvisionUser(null)}>
-                  Отмена
-                </Button>
-                <Button type="submit" disabled={isProvisionSubmitting} className="bg-blue-600 hover:bg-blue-700 text-white">
-                  {isProvisionSubmitting ? <Spinner className="size-4" /> : 'Создать ключ'}
-                </Button>
-              </div>
-            </form>
-          </OGDialogTemplate>
+                <div className="flex justify-end gap-2 pt-4">
+                  <Button type="button" variant="outline" onClick={() => setProvisionUser(null)}>
+                    Отмена
+                  </Button>
+                  <Button type="submit" disabled={isProvisionSubmitting} className="bg-blue-600 hover:bg-blue-700 text-white">
+                    {isProvisionSubmitting ? <Spinner className="size-4" /> : 'Создать ключ'}
+                  </Button>
+                </div>
+              </form>
+            }
+          />
         </OGDialog>
       )}
 
@@ -591,34 +680,35 @@ export default function OpenRouterAdminView() {
           <OGDialogTemplate
             title={`История пополнений: ${historyUser.name || historyUser.email}`}
             showCloseButton={true}
-          >
-            <div className="space-y-3 pt-2 max-h-[60vh] overflow-y-auto">
-              {loadingHistory ? (
-                <div className="p-6 text-center">
-                  <Spinner className="size-6 text-purple-500" />
-                </div>
-              ) : userHistory.length === 0 ? (
-                <p className="text-sm text-text-secondary text-center py-4">
-                  История пополнений пуста
-                </p>
-              ) : (
-                userHistory.map((rec) => (
-                  <div key={rec._id} className="p-3 border border-border-subtle rounded-lg bg-surface-secondary text-sm">
-                    <div className="flex justify-between font-semibold">
-                      <span className="text-emerald-500">+${rec.amount.toFixed(2)} ({rec.transactionType})</span>
-                      <span className="text-xs text-text-secondary">
-                        {new Date(rec.createdAt).toLocaleString('ru-RU')}
-                      </span>
-                    </div>
-                    <div className="text-xs text-text-secondary mt-1">
-                      Лимит изменён с ${rec.previousLimit} до ${rec.newLimit}
-                    </div>
-                    {rec.note && <div className="text-xs italic text-text-tertiary mt-1 font-medium">"{rec.note}"</div>}
+            main={
+              <div className="space-y-3 pt-2 max-h-[60vh] overflow-y-auto">
+                {loadingHistory ? (
+                  <div className="p-6 text-center">
+                    <Spinner className="size-6 text-purple-500" />
                   </div>
-                ))
-              )}
-            </div>
-          </OGDialogTemplate>
+                ) : userHistory.length === 0 ? (
+                  <p className="text-sm text-text-secondary text-center py-4">
+                    История пополнений пуста
+                  </p>
+                ) : (
+                  userHistory.map((rec) => (
+                    <div key={rec._id} className="p-3 border border-border-subtle rounded-lg bg-surface-secondary text-sm">
+                      <div className="flex justify-between font-semibold">
+                        <span className="text-emerald-500">+${rec.amount.toFixed(2)} ({rec.transactionType})</span>
+                        <span className="text-xs text-text-secondary">
+                          {new Date(rec.createdAt).toLocaleString('ru-RU')}
+                        </span>
+                      </div>
+                      <div className="text-xs text-text-secondary mt-1">
+                        Лимит изменён с ${rec.previousLimit} до ${rec.newLimit}
+                      </div>
+                      {rec.note && <div className="text-xs italic text-text-tertiary mt-1 font-medium">"{rec.note}"</div>}
+                    </div>
+                  ))
+                )}
+              </div>
+            }
+          />
         </OGDialog>
       )}
 
@@ -628,32 +718,33 @@ export default function OpenRouterAdminView() {
           <OGDialogTemplate
             title={`Расшифрованный API ключ: ${revealingUser?.name || revealingUser?.email}`}
             showCloseButton={true}
-          >
-            <div className="space-y-4 pt-2">
-              <div className="p-3 bg-surface-tertiary border border-border-subtle rounded-lg text-xs font-mono break-all select-all flex items-center justify-between gap-2">
-                <span className="flex-1">{revealedKey}</span>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => {
-                    navigator.clipboard.writeText(revealedKey);
-                    showToast({ message: 'Ключ скопирован в буфер обмена', status: 'success' });
-                  }}
-                  className="text-xs px-2 py-1 border-blue-500/30 text-blue-400 hover:bg-blue-500/10 flex items-center gap-1 shrink-0"
-                >
-                  <Copy className="size-3.5" /> Скопировать
-                </Button>
+            main={
+              <div className="space-y-4 pt-2">
+                <div className="p-3 bg-surface-tertiary border border-border-subtle rounded-lg text-xs font-mono break-all select-all flex items-center justify-between gap-2">
+                  <span className="flex-1">{revealedKey}</span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      navigator.clipboard.writeText(revealedKey);
+                      showToast({ message: 'Ключ скопирован в буфер обмена', status: 'success' });
+                    }}
+                    className="text-xs px-2 py-1 border-blue-500/30 text-blue-400 hover:bg-blue-500/10 flex items-center gap-1 shrink-0"
+                  >
+                    <Copy className="size-3.5" /> Скопировать
+                  </Button>
+                </div>
+                <p className="text-xs text-amber-500">
+                  ⚠️ Сохраняйте данный ключ в секрете.
+                </p>
+                <div className="flex justify-end">
+                  <Button variant="outline" onClick={() => { setRevealedKey(null); setRevealingUser(null); }}>
+                    Закрыть
+                  </Button>
+                </div>
               </div>
-              <p className="text-xs text-amber-500">
-                ⚠️ Сохраняйте данный ключ в секрете.
-              </p>
-              <div className="flex justify-end">
-                <Button variant="outline" onClick={() => { setRevealedKey(null); setRevealingUser(null); }}>
-                  Закрыть
-                </Button>
-              </div>
-            </div>
-          </OGDialogTemplate>
+            }
+          />
         </OGDialog>
       )}
     </div>

@@ -17,7 +17,7 @@ async function _getResponse<T = unknown>(
   return await axios.get<T>(url, { ...options });
 }
 
-async function _post(url: string, data?: any) {
+async function _post<T = any>(url: string, data?: any): Promise<T> {
   const response = await axios.post(url, JSON.stringify(data), {
     headers: { 'Content-Type': 'application/json' },
   });
@@ -41,7 +41,7 @@ async function _postTTS(url: string, formData: FormData, options?: AxiosRequestC
   return response.data;
 }
 
-async function _put(url: string, data?: any) {
+async function _put<T = any>(url: string, data?: any): Promise<T> {
   const response = await axios.put(url, JSON.stringify(data), {
     headers: { 'Content-Type': 'application/json' },
   });
@@ -58,7 +58,7 @@ async function _deleteWithOptions<T>(url: string, options?: AxiosRequestConfig):
   return response.data;
 }
 
-async function _patch(url: string, data?: any) {
+async function _patch<T = any>(url: string, data?: any): Promise<T> {
   const response = await axios.patch(url, JSON.stringify(data), {
     headers: { 'Content-Type': 'application/json' },
   });

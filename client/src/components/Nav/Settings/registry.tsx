@@ -149,6 +149,18 @@ export const registry: SettingEntry[] = [
     }),
   },
   {
+    id: 'sidebarExpanded',
+    tab: GENERAL,
+    section: 'layout',
+    labelKey: 'com_nav_show_sidebar',
+    keywords: ['sidebar', 'nav', 'navigation', 'panel', 'history'],
+    Component: toggleControl({
+      stateAtom: store.sidebarExpanded,
+      localizationKey: 'com_nav_show_sidebar',
+      switchId: 'sidebarExpanded',
+    }),
+  },
+  {
     id: 'mobileDrawerStrip',
     tab: GENERAL,
     section: 'layout',

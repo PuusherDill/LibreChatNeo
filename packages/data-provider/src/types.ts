@@ -313,6 +313,7 @@ export type TBackupCode = {
 
 export type TUser = {
   id: string;
+  _id?: string;
   username: string;
   email: string;
   name: string;
@@ -327,6 +328,10 @@ export type TUser = {
     memories?: boolean;
     statefulCodeEnvironment?: StatefulCodeEnvironment;
   };
+  openrouterKeyHash?: string;
+  openrouterCreditLimit?: number;
+  openrouterCreditUsed?: number;
+  openrouterKeyDisabled?: boolean;
   createdAt: string;
   updatedAt: string;
 };

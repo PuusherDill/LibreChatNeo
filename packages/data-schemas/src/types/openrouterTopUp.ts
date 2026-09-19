@@ -21,7 +21,14 @@ export interface IOpenRouterTopUp extends Document {
   /** When the subscription expires (for subscription transactions) */
   subscriptionExpiresAt?: Date | null;
   /** The OpenRouter key hash this transaction was applied to */
-  openrouterKeyHash: string;
+  /** Amount in GEL */
+  amountGel?: number;
+  /** Status of transaction (pending for card payments awaiting admin review) */
+  status?: 'pending' | 'approved' | 'rejected' | 'completed';
+  /** Payment method used (e.g. card, crypto, manual) */
+  paymentMethod?: string;
+  /** Customer comment or transaction reference */
+  userComment?: string;
   tenantId?: string;
   createdAt?: Date;
   updatedAt?: Date;

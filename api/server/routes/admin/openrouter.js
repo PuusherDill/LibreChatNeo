@@ -425,11 +425,129 @@ router.get('/reveal/:userId', async (req, res) => {
       `[adminOpenRouter] Key revealed for user ${req.params.userId} by admin ${req.user.email}`,
     );
 
-    return res.json({ key: plaintext, hash: user.openrouterKeyHash });
+    return res.json({ key: plaintext });
   } catch (err) {
-    logger.error('[adminOpenRouter] /reveal/:userId error:', err);
+    logger.error('[adminOpenRouter] /reveal error:', err);
+    return res.status(500).json({ error: 'Failed to reveal key' });
+  }
+});
+// ---------------------------------------------------------------------------
+// GET /api/admin/openrouter/pending
+// List all pending card payment requests awaiting admin review.
+// ---------------------------------------------------------------------------
+router.get('/pending', async (req, res) => {
+  try {
+    const TopUp = getTopUpModel();
+    const records = await TopUp.find({ status: 'pending' })
+      .sort({ createdAt: -1 })
+      .populate('user', 'name username email openrouterCreditLimit openrouterKeyHash')
+      .lean();
+
+    return res.json({ records });
+  } catch (err) {
+    logger.error('[adminOpenRouter] /pending error:', err);
+    return res.status(500).json({ error: 'Failed to load pending requests' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/admin/openrouter/approve/:id
+// Approve a pending card payment request and add credit to user.
+// ---------------------------------------------------------------------------
+router.post('/approve/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const TopUp = getTopUpModel();
+    const record = await TopUp.findById(id);
+
+    if (!record) {
+      return res.status(404).json({ error: 'Заявка не найдена' });
+    }
+    if (record.status !== 'pending') {
+      return res.status(400).json({ error: `Заявка уже имеет статус ${record.status}` });
+    }
+
+    const userId = record.user.toString();
+    const user = await runAsSystem(() =>
+      findUser(
+        { _id: userId },
+        'name username email openrouterKeyHash openrouterCreditLimit openrouterCreditUsed',
+      ),
+    );
+
+    if (!user) {
+      return res.status(404).json({ error: 'Пользователь не найден' });
+    }
+
+    let keyHash = user.openrouterKeyHash;
+    if (!keyHash) {
+      const displayName = `${user.name || user.username || user.email} [LibreChat]`;
+      const provisioned = await createKeyForUser(displayName, record.amount);
+      keyHash = provisioned.hash;
+      await updateUser(userId, {
+        openrouterKeyHash: provisioned.hash,
+        openrouterKeyEncrypted: provisioned.keyEncrypted,
+        openrouterCreditLimit: record.amount,
+        openrouterCreditUsed: 0,
+        openrouterKeyDisabled: false,
+      });
+    }
+
+    const prevLimitUsd = user.openrouterCreditLimit ?? 0;
+    const newLimitUsd = parseFloat((prevLimitUsd + record.amount).toFixed(4));
+    const newRemainingUsd = Math.max(0, newLimitUsd - (user.openrouterCreditUsed ?? 0));
+
+    await updateKeyLimit(keyHash, newLimitUsd);
+    await updateUser(userId, {
+      openrouterCreditLimit: newLimitUsd,
+      openrouterKeyDisabled: false,
+    });
+
+    const { upsertBalanceFields } = require('~/models');
+    await runAsSystem(() => upsertBalanceFields({ user: userId, tokenCredits: newRemainingUsd }));
+
+    record.status = 'completed';
+    record.previousLimit = prevLimitUsd;
+    record.newLimit = newLimitUsd;
+    record.openrouterKeyHash = keyHash;
+    record.addedBy = req.user._id;
+    await record.save();
+
+    logger.info(`[adminOpenRouter] Card request approved by ${req.user.email} for user ${user.email} (+$${record.amount})`);
+
+    return res.json({ success: true, newLimit: newLimitUsd, record: record.toObject() });
+  } catch (err) {
+    logger.error('[adminOpenRouter] /approve error:', err);
+    return res.status(500).json({ error: err.message || 'Ошибка одобрения заявки' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/admin/openrouter/reject/:id
+// Reject a pending card payment request.
+// ---------------------------------------------------------------------------
+router.post('/reject/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const TopUp = getTopUpModel();
+    const record = await TopUp.findById(id);
+
+    if (!record) {
+      return res.status(404).json({ error: 'Заявка не найдена' });
+    }
+
+    record.status = 'rejected';
+    record.addedBy = req.user._id;
+    await record.save();
+
+    logger.info(`[adminOpenRouter] Card request rejected by ${req.user.email}`);
+
+    return res.json({ success: true, record: record.toObject() });
+  } catch (err) {
+    logger.error('[adminOpenRouter] /reject error:', err);
     return res.status(500).json({ error: err.message });
   }
 });
 
 module.exports = router;
+
