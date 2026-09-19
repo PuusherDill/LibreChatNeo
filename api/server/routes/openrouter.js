@@ -29,7 +29,7 @@ function getTopUpModel() {
 router.get('/balance', async (req, res) => {
   try {
     const userId = req.user._id;
-    const gelPerUsd = parseFloat(process.env.GEL_PER_USD) || 2.70;
+    const gelPerUsd = parseFloat(process.env.GEL_PER_USD) || 2.7;
     const minTopUpGel = parseFloat(process.env.MIN_TOPUP_GEL) || 10;
     const presetPackagesGel = [15, 20, 35, 45];
 
@@ -55,13 +55,15 @@ router.get('/balance', async (req, res) => {
     const usedGel = parseFloat((usedUsd * gelPerUsd).toFixed(2));
 
     // Sync Mongo tokenCredits field
-    runAsSystem(() => upsertBalanceFields({ user: userId, tokenCredits: remainingUsd })).catch(() => {});
+    runAsSystem(() => upsertBalanceFields(userId.toString(), { tokenCredits: remainingUsd })).catch(
+      () => {},
+    );
 
     let liveStatus = null;
     if (hasKey) {
       try {
         liveStatus = await getKeyStatus(user.openrouterKeyHash);
-      } catch (e) {
+      } catch (_e) {
         // Fallback silently if live API fails
       }
     }
@@ -94,7 +96,7 @@ router.get('/balance', async (req, res) => {
 router.post('/topup', async (req, res) => {
   try {
     const userId = req.user._id;
-    const gelPerUsd = parseFloat(process.env.GEL_PER_USD) || 2.70;
+    const gelPerUsd = parseFloat(process.env.GEL_PER_USD) || 2.7;
     const minTopUpGel = parseFloat(process.env.MIN_TOPUP_GEL) || 10;
     const { note = '', transactionType = 'topup', subscriptionMonths } = req.body;
 
@@ -155,7 +157,9 @@ router.post('/topup', async (req, res) => {
       openrouterCreditLimit: newLimitUsd,
       openrouterKeyDisabled: false,
     });
-    await runAsSystem(() => upsertBalanceFields({ user: userId, tokenCredits: newRemainingUsd }));
+    await runAsSystem(() =>
+      upsertBalanceFields(userId.toString(), { tokenCredits: newRemainingUsd }),
+    );
 
     // Record top-up transaction
     const TopUp = getTopUpModel();
@@ -173,7 +177,11 @@ router.post('/topup', async (req, res) => {
       amountGel,
       newLimit: newLimitUsd,
       previousLimit: prevLimitUsd,
-      note: note || (transactionType === 'subscription' ? `Подписка на ${subscriptionMonths} мес.` : `Пополнение на ${amountGel} GEL ($${amountUsd} USD)`),
+      note:
+        note ||
+        (transactionType === 'subscription'
+          ? `Подписка на ${subscriptionMonths} мес.`
+          : `Пополнение на ${amountGel} GEL ($${amountUsd} USD)`),
       addedBy: userId,
       transactionType,
       subscriptionMonths: subscriptionMonths ? parseInt(subscriptionMonths, 10) : null,
@@ -207,9 +215,7 @@ router.get('/history', async (req, res) => {
     const userId = req.user._id;
     const TopUp = getTopUpModel();
 
-    const records = await TopUp.find({ user: userId })
-      .sort({ createdAt: -1 })
-      .lean();
+    const records = await TopUp.find({ user: userId }).sort({ createdAt: -1 }).lean();
 
     return res.json({ records });
   } catch (err) {
@@ -224,7 +230,7 @@ router.get('/history', async (req, res) => {
 router.post('/card-request', async (req, res) => {
   try {
     const userId = req.user._id;
-    const gelPerUsd = parseFloat(process.env.GEL_PER_USD) || 2.70;
+    const gelPerUsd = parseFloat(process.env.GEL_PER_USD) || 2.7;
     const minTopUpGel = parseFloat(process.env.MIN_TOPUP_GEL) || 10;
     const { amountGel: inputGel, userComment = '', transactionType = 'topup' } = req.body;
 
@@ -256,7 +262,9 @@ router.post('/card-request', async (req, res) => {
       openrouterKeyHash: user?.openrouterKeyHash || '',
     });
 
-    logger.info(`[openrouterUser] Card payment request created by ${req.user.email} for ${amountGel} GEL`);
+    logger.info(
+      `[openrouterUser] Card payment request created by ${req.user.email} for ${amountGel} GEL`,
+    );
 
     return res.json({
       success: true,
@@ -270,4 +278,3 @@ router.post('/card-request', async (req, res) => {
 });
 
 module.exports = router;
-

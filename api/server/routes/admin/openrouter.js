@@ -38,7 +38,13 @@ router.use(requireJwtAuth, requireAdminAccess);
 // Helper: resolve OpenRouterTopUp model from active mongoose connection
 // ---------------------------------------------------------------------------
 function getTopUpModel() {
-  return mongoose.models.OpenRouterTopUp;
+  const model = mongoose.models.OpenRouterTopUp;
+  if (!model) {
+    throw new Error(
+      'OpenRouterTopUp model is not registered in mongoose. Check data-schemas dist build.',
+    );
+  }
+  return model;
 }
 
 // ---------------------------------------------------------------------------
@@ -227,10 +233,7 @@ router.post('/topup', async (req, res) => {
     }
 
     const user = await runAsSystem(() =>
-      findUser(
-        { _id: userId },
-        'name username email openrouterKeyHash openrouterCreditLimit',
-      ),
+      findUser({ _id: userId }, 'name username email openrouterKeyHash openrouterCreditLimit'),
     );
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
@@ -504,7 +507,9 @@ router.post('/approve/:id', async (req, res) => {
     });
 
     const { upsertBalanceFields } = require('~/models');
-    await runAsSystem(() => upsertBalanceFields({ user: userId, tokenCredits: newRemainingUsd }));
+    await runAsSystem(() =>
+      upsertBalanceFields(userId.toString(), { tokenCredits: newRemainingUsd }),
+    );
 
     record.status = 'completed';
     record.previousLimit = prevLimitUsd;
@@ -513,7 +518,9 @@ router.post('/approve/:id', async (req, res) => {
     record.addedBy = req.user._id;
     await record.save();
 
-    logger.info(`[adminOpenRouter] Card request approved by ${req.user.email} for user ${user.email} (+$${record.amount})`);
+    logger.info(
+      `[adminOpenRouter] Card request approved by ${req.user.email} for user ${user.email} (+$${record.amount})`,
+    );
 
     return res.json({ success: true, newLimit: newLimitUsd, record: record.toObject() });
   } catch (err) {
@@ -550,4 +557,3 @@ router.post('/reject/:id', async (req, res) => {
 });
 
 module.exports = router;
-
