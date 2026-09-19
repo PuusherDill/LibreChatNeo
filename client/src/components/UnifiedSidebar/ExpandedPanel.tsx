@@ -169,27 +169,27 @@ function ExpandedPanel({
           </Button>
         }
       />
-      <NewChatButton setActive={setActive} />
-      <AgentMarketplaceButton />
-      <div className="mx-2 border-b border-border-light" />
+      {/* Navigation items (filtered to remove extra tools) */}
       <div className="flex flex-col gap-1 overflow-y-auto">
-        {links.map((link) => (
-          <NavIconButton
-            key={link.id}
-            link={link}
-            isActive={
-              link.id === 'insights'
-                ? isInsightsRoute
-                : !isInsightsRoute && link.id === effectiveActive
-            }
-            expanded={expanded ?? true}
-            setActive={setActive}
-            onExpand={onExpand}
-            onCollapse={onCollapse}
-            onNavigate={onNavigate}
-            onLeaveInsights={isInsightsRoute ? onLeaveInsights : undefined}
-          />
-        ))}
+        {links
+          .filter((link) => ['conversations', 'history'].includes(link.id))
+          .map((link) => (
+            <NavIconButton
+              key={link.id}
+              link={link}
+              isActive={
+                link.id === 'insights'
+                  ? isInsightsRoute
+                  : !isInsightsRoute && link.id === effectiveActive
+              }
+              expanded={expanded ?? true}
+              setActive={setActive}
+              onExpand={onExpand}
+              onCollapse={onCollapse}
+              onNavigate={onNavigate}
+              onLeaveInsights={isInsightsRoute ? onLeaveInsights : undefined}
+            />
+          ))}
       </div>
 
       <div className="mt-auto">

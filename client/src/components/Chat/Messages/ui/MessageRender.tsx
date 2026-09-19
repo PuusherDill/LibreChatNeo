@@ -156,13 +156,8 @@ const MessageRender = memo(function MessageRender({
     <MessageRow
       id={msg.messageId}
       icon={<MessageIcon iconData={iconData} assistant={assistant} agent={agent} />}
-      label={messageLabel ?? ''}
-      hoverLabel={getHeaderModelName(
-        agent?.model,
-        assistant?.model,
-        msg.model,
-        conversation?.model,
-      )}
+      label={msg.isCreatedByUser === true ? (messageLabel ?? '') : 'ige'}
+      hoverLabel={msg.isCreatedByUser === true ? (messageLabel ?? '') : 'ige'}
       timestamp={msg.createdAt ?? msg.clientTimestamp}
       ariaLabel={getMessageAriaLabel(msg, localize)}
       headerPrefix={getHeaderPrefixForScreenReader(msg, localize)}

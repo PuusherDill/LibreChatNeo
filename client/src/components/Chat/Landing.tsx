@@ -89,7 +89,7 @@ export default function Landing({ centerFormOnLanding }: { centerFormOnLanding: 
 
   const brandedSpecLabel = modelSpec?.showOnLanding ? modelSpec.label : '';
   const brandedSpecDescription = (modelSpec?.showOnLanding && modelSpec.description) || '';
-  const name = isTemporary ? '' : (entity?.name ?? brandedSpecLabel);
+  const name = isAgent || isAssistant ? (entity?.name ?? '') : '';
   const description = isTemporary
     ? localize('com_ui_temporary_description')
     : ((entity?.description || brandedSpecDescription || conversation?.greeting) ?? '');

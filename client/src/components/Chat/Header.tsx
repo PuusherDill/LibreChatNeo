@@ -86,16 +86,6 @@ function Header({
         {parentConversationId != null && (
           <SubagentThreadLink threadId={parentConversationId} labelClassName="hidden lg:inline" />
         )}
-        {hasAccessToBookmarks === true && (
-          <div className="hidden items-center md:flex">
-            <BookmarkMenu />
-          </div>
-        )}
-        {hasAccessToMultiConvo === true && (
-          <div className="hidden items-center md:flex">
-            <AddMultiConvo />
-          </div>
-        )}
       </div>
 
       <div className={cn('flex flex-shrink-0 items-center gap-2', hiddenBehindNav)}>

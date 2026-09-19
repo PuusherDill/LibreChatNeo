@@ -79,6 +79,16 @@ const MessageIcon = memo(({ iconData, assistant, agent }: MessageIconProps) => {
     );
   }
 
+  if (iconData?.isCreatedByUser !== true) {
+    return (
+      <img
+        src="/assets/favicon-52x52.png"
+        alt="ige"
+        className="h-[28.8px] w-[28.8px] rounded-full object-cover"
+      />
+    );
+  }
+
   return (
     <Icon
       isCreatedByUser={iconData?.isCreatedByUser ?? false}

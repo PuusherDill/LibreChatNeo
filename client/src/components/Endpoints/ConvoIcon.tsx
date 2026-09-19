@@ -142,17 +142,8 @@ export default function ConvoIcon({
       );
     }
 
-    if (imageURL != null) {
-      return <img src={imageURL} alt={`${endpoint} Icon`} className={className} />;
-    }
-
     return (
-      <ProviderIcon
-        provider={provider}
-        model={conversation?.model}
-        size={size != null ? Math.round(size * artScale) : undefined}
-        className={cn(className, context === 'landing' && provider === ProviderId.cohere && 'p-2')}
-      />
+      <img src="/assets/favicon-52x52.png" alt="ige" className="h-full w-full rounded-full object-cover" />
     );
   };
 
